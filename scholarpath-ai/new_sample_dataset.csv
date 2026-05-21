@@ -1,0 +1,113 @@
+title,category,type,level,activity_type,scholarship_path,description
+Olimpiade Sains Nasional (OSN) Matematika,Science,Competition,SMA,Academic,STEM,"Kompetisi matematika tingkat nasional bergengsi untuk siswa SMA, seleksi dari kabupaten hingga nasional"
+Olimpiade Sains Nasional (OSN) Fisika,Science,Competition,SMA,Academic,STEM,"Kompetisi fisika nasional SMA mencakup mekanika, termodinamika, elektromagnetisme, dan fisika modern"
+Olimpiade Sains Nasional (OSN) Biologi,Science,Competition,SMA,Academic,STEM,"Kompetisi biologi nasional SMA meliputi sel, genetika, ekologi, fisiologi, dan bioteknologi"
+Olimpiade Sains Nasional (OSN) Kimia,Science,Competition,SMA,Academic,STEM,"Kompetisi kimia nasional SMA mencakup kimia organik, anorganik, analitik, dan fisika kimia"
+Olimpiade Sains Nasional (OSN) Astronomi,Science,Competition,SMA,Academic,STEM,"Kompetisi astronomi nasional SMA meliputi mekanika langit, astrofisika, dan pengamatan bintang"
+Olimpiade Sains Nasional (OSN) Kebumian,Science,Competition,SMA,Academic,STEM,"Kompetisi ilmu kebumian nasional SMA: geologi, meteorologi, oseanografi, dan astronomi dasar"
+Olimpiade Sains Nasional (OSN) IPA SMP,Science,Competition,SMP,Academic,STEM,"Kompetisi sains terpadu SMP tingkat nasional mencakup fisika, biologi, dan kimia dasar"
+Olimpiade Sains Nasional (OSN) Matematika SMP,Science,Competition,SMP,Academic,STEM,"Kompetisi matematika nasional untuk siswa SMP mencakup aljabar, geometri, dan kombinatorika"
+International Mathematics Olympiad (IMO) Selection,Science,Competition,SMA,Academic,STEM,Seleksi nasional untuk wakil Indonesia di olimpiade matematika internasional bergengsi
+International Physics Olympiad (IPhO) Selection,Science,Competition,SMA,Academic,STEM,Seleksi nasional wakil Indonesia di olimpiade fisika internasional tingkat dunia
+International Biology Olympiad (IBO) Selection,Science,Competition,SMA,Academic,STEM,"Seleksi nasional olimpiade biologi internasional, uji teori dan praktikum laboratorium"
+International Chemistry Olympiad (IChO) Selection,Science,Competition,SMA,Academic,STEM,"Seleksi wakil Indonesia di olimpiade kimia internasional, eksperimen dan teori"
+International Junior Science Olympiad (IJSO) Selection,Science,Competition,SMP,Academic,STEM,Seleksi wakil Indonesia di olimpiade sains junior internasional untuk siswa SMP
+Indonesian Science Project Olympiad (ISPO),Science,Competition,SMP-SMA,Academic,STEM,Kompetisi proyek sains dan penelitian ilmiah siswa tingkat nasional
+Olimpiade Fisika UI,Science,Competition,SMA,Academic,STEM,Olimpiade fisika yang diselenggarakan Universitas Indonesia untuk siswa SMA
+Olimpiade Kimia Nasional (OKN) UGM,Science,Competition,SMA,Academic,STEM,Olimpiade kimia nasional diselenggarakan UGM untuk siswa SMA seluruh Indonesia
+Olimpiade Biologi Nasional (OBN) UI,Science,Competition,SMA,Academic,STEM,Olimpiade biologi yang diselenggarakan Universitas Indonesia untuk siswa SMA
+Olimpiade Matematika ITS (OMITS),Science,Competition,SMP-SMA,Academic,STEM,"Olimpiade matematika ITS untuk siswa SMP dan SMA, kategori terpisah"
+Chemistry Innovation Project (CIP),Science,Competition,SMA,Academic,STEM,Kompetisi proyek inovasi kimia nasional untuk siswa SMA
+Olimpiade Mikrobiologi Nasional,Science,Competition,SMA,Academic,STEM,"Kompetisi mikrobiologi nasional untuk siswa SMA, meliputi teori dan analisis mikroorganisme"
+Olimpiade Statistika Nasional,Science,Competition,SMA,Academic,STEM,Kompetisi statistika nasional untuk siswa SMA mencakup statistika deskriptif dan inferensial
+Olimpiade Matematika Terapan,Science,Competition,SMA,Academic,STEM,Kompetisi matematika terapan nasional yang menekankan pemodelan dan aplikasi dunia nyata
+Olimpiade Fisika Astronomi,Science,Competition,SMA,Academic,STEM,Olimpiade fisika dengan fokus astronomi dan astrofisika untuk siswa SMA
+Olimpiade Kimia Analitik,Science,Competition,SMA,Academic,STEM,"Kompetisi kimia analitik nasional untuk siswa SMA, uji identifikasi dan analisis senyawa"
+Olimpiade Kedokteran Dasar (OKD),Science,Competition,SMA,Academic,STEM,"Olimpiade ilmu kedokteran dasar untuk siswa SMA, mencakup anatomi dan fisiologi"
+Olimpiade Farmasi Nasional,Science,Competition,SMA,Academic,STEM,"Kompetisi farmasi nasional untuk siswa SMA, meliputi kimia medisinal dan farmakologi dasar"
+Olimpiade Lingkungan Hidup,Science,Competition,SMP-SMA,Academic,STEM,Kompetisi ilmu lingkungan hidup nasional untuk siswa SMP dan SMA
+Olimpiade Matematika Nasional Unpad,Science,Competition,SMP-SMA,Academic,STEM,Olimpiade matematika diselenggarakan Universitas Padjadjaran untuk SMP dan SMA
+National Science Challenge (NSC),Science,Competition,SMP,Academic,STEM,"Kompetisi sains nasional untuk siswa SMP mencakup fisika, biologi, kimia terpadu"
+Olimpiade Sains Nasional (OSN) Informatika,Technology,Competition,SMA,Academic,Engineering,"Kompetisi informatika dan pemrograman nasional SMA, mencakup algoritma dan struktur data"
+National Robotics Competition (NRC),Technology,Competition,SMP-SMA,Academic,Engineering,"Kompetisi robotika nasional untuk siswa SMP dan SMA, desain dan pemrograman robot"
+Lomba Robotik Madrasah,Technology,Competition,SMP-SMA,Academic,Engineering,Kompetisi robotik untuk siswa madrasah tingkat SMP dan SMA seluruh Indonesia
+Lomba Koding Web Sederhana,Technology,Competition,SMA,Academic,Engineering,"Kompetisi pengembangan web untuk siswa SMA, mencakup HTML, CSS, dan JavaScript"
+National Young Inventors Award (NYIA),Technology,Competition,SMP-SMA,Academic,Engineering,Penghargaan inovasi teknologi nasional untuk siswa SMP dan SMA
+Lomba Vlog Edukasi Pelajar,Technology,Competition,SMA,Academic,Engineering,Kompetisi pembuatan konten video edukasi berbasis teknologi untuk siswa SMA
+International Olympiad in Informatics (IOI) Selection,Technology,Competition,SMA,Academic,Engineering,Seleksi nasional wakil Indonesia di olimpiade informatika internasional
+Lomba Desain UI/UX Pelajar Nasional,Technology,Competition,SMA,Academic,Engineering,Kompetisi desain antarmuka pengguna dan pengalaman pengguna aplikasi untuk siswa SMA
+Festival Inovasi dan Kewirausahaan Siswa Indonesia (FIKSI),Technology,Competition,SMA,Non-Academic,Engineering,Festival inovasi dan wirausaha nasional untuk siswa SMA
+Olimpiade Sains Nasional (OSN) Ekonomi,Social,Competition,SMA,Academic,General,"Kompetisi ekonomi nasional SMA mencakup mikro, makro, dan ekonomi internasional"
+Olimpiade Sains Nasional (OSN) Geografi,Social,Competition,SMA,Academic,General,"Kompetisi geografi nasional SMA mencakup geografi fisik, manusia, dan pemetaan"
+Olimpiade Sains Nasional (OSN) IPS SMP,Social,Competition,SMP,Academic,General,"Kompetisi IPS terpadu SMP tingkat nasional: geografi, sejarah, ekonomi, sosiologi"
+Olimpiade Ekonomi Universitas Gadjah Mada,Social,Competition,SMA,Academic,General,Olimpiade ekonomi bergengsi yang diselenggarakan Fakultas Ekonomi UGM untuk siswa SMA
+Olimpiade Sosiologi Nasional,Social,Competition,SMA,Academic,General,"Kompetisi sosiologi nasional untuk siswa SMA, mencakup teori dan analisis sosial"
+Olimpiade Geografi Nasional (Olgenas) UGM,Social,Competition,SMA,Academic,General,Olimpiade geografi nasional yang diselenggarakan UGM untuk siswa SMA
+National Accounting Olympiad (NAO),Social,Competition,SMA,Academic,General,"Olimpiade akuntansi nasional untuk siswa SMA, mencakup laporan keuangan dan standar akuntansi"
+Olimpiade Kebijakan Publik Muda,Social,Competition,SMA,Academic,General,Kompetisi analisis kebijakan publik nasional untuk siswa SMA
+Olimpiade Sejarah Nasional,Social,Competition,SMA,Academic,General,"Kompetisi sejarah nasional untuk siswa SMA, mencakup sejarah Indonesia dan dunia"
+Indonesian Heritage Olympiad,Social,Competition,SMP,Academic,General,Olimpiade warisan budaya dan sejarah Indonesia untuk siswa SMP
+Lomba Cerdas Cermat (LCC) Museum,Social,Competition,SMP,Academic,General,Kompetisi cerdas cermat wawasan museum dan sejarah untuk siswa SMP
+Lomba Debat Bahasa Indonesia (LDBI),Language,Competition,SMA,Academic,International,Kompetisi debat formal bahasa Indonesia tingkat nasional untuk siswa SMA
+National Schools Debating Championship (NSDC),Language,Competition,SMA,Academic,International,Kompetisi debat bahasa Inggris nasional untuk siswa SMA
+English Speech Competition (ESC),Language,Competition,SMP-SMA,Academic,International,Kompetisi pidato bahasa Inggris nasional untuk siswa SMP dan SMA
+National English Competition (NEC),Language,Competition,SMP-SMA,Academic,International,Kompetisi bahasa Inggris komprehensif untuk siswa SMP dan SMA tingkat nasional
+Olimpiade Bahasa Inggris Nasional,Language,Competition,SMP-SMA,Academic,International,Olimpiade bahasa Inggris nasional untuk siswa SMP dan SMA
+Lomba Storytelling Bahasa Inggris,Language,Competition,SMP,Academic,International,Kompetisi bercerita dalam bahasa Inggris tingkat nasional untuk siswa SMP
+Olimpiade Bahasa Arab (OBA) Nasional,Language,Competition,SMP-SMA,Academic,International,Olimpiade bahasa Arab nasional untuk siswa SMP dan SMA
+Lomba News Casting Bahasa Inggris,Language,Competition,SMA,Academic,International,Kompetisi penyiar berita berbahasa Inggris nasional untuk siswa SMA
+Lomba Scrabbel Bahasa Inggris,Language,Competition,SMP-SMA,Academic,International,Kompetisi scrabble berbahasa Inggris nasional untuk siswa SMP dan SMA
+Lomba Pidato Bahasa Indonesia Nasional,Language,Competition,SMP,Academic,General,Kompetisi pidato formal bahasa Indonesia tingkat nasional untuk siswa SMP
+Festival dan Lomba Seni Siswa Nasional (FLS2N) Menyanyi,Art,Competition,SMP,Non-Academic,Creative,Festival seni nasional cabang menyanyi solo untuk siswa SMP
+Festival dan Lomba Seni Siswa Nasional (FLS2N) Tari,Art,Competition,SMA,Non-Academic,Creative,Festival seni nasional cabang tari kreasi untuk siswa SMA
+Lomba Desain Poster Nasional,Art,Competition,SMA,Non-Academic,Creative,Kompetisi desain poster kreatif nasional untuk siswa SMA
+Lomba Melukis Nasional,Art,Competition,SMP,Academic,Creative,Kompetisi melukis tingkat nasional untuk siswa SMP
+Lomba Kaligrafi Nasional,Art,Competition,SMP-SMA,Academic,Creative,Kompetisi kaligrafi nasional untuk siswa SMP dan SMA
+Lomba Baca Puisi Nasional,Art,Competition,SMP-SMA,Academic,Creative,Kompetisi baca puisi nasional untuk siswa SMP dan SMA
+Lomba Musikalisasi Puisi Nasional,Art,Competition,SMA,Academic,Creative,Kompetisi musikalisasi puisi nasional untuk siswa SMA
+Lomba Fotografi Pelajar Nasional,Art,Competition,SMA,Non-Academic,Creative,Kompetisi fotografi pelajar tingkat nasional untuk siswa SMA
+Lomba Film Pendek Dokumenter,Art,Competition,SMA,Non-Academic,Creative,Kompetisi film pendek dokumenter nasional untuk siswa SMA
+Lomba Desain Batik Pelajar,Art,Competition,SMA,Academic,Creative,Kompetisi desain motif batik modern nasional untuk siswa SMA
+Lomba Karikatur Sosial,Art,Competition,SMA,Academic,Creative,Kompetisi karikatur bertema sosial nasional untuk siswa SMA
+Lomba Cipta Lagu Pelajar,Art,Competition,SMA,Academic,Creative,Kompetisi penciptaan lagu nasional untuk siswa SMA
+Lomba Monolog Teater Pelajar,Art,Competition,SMA,Academic,Creative,Kompetisi monolog teater nasional untuk siswa SMA
+Olimpiade Olahraga Siswa Nasional (O2SN) Renang,Sports,Competition,SMP-SMA,Academic,Sports,Kompetisi renang nasional untuk siswa SMP dan SMA dalam berbagai nomor gaya
+Olimpiade Olahraga Siswa Nasional (O2SN) Bulutangkis,Sports,Competition,SMP-SMA,Academic,Sports,Kompetisi bulutangkis nasional untuk siswa SMP dan SMA
+Olimpiade Olahraga Siswa Nasional (O2SN) Karate,Sports,Competition,SMP-SMA,Academic,Sports,Kompetisi karate nasional untuk siswa SMP dan SMA
+Olimpiade Olahraga Siswa Nasional (O2SN) Atletik,Sports,Competition,SMP-SMA,Academic,Sports,Kompetisi atletik nasional untuk siswa SMP dan SMA
+Olimpiade Olahraga Siswa Nasional (O2SN) Pencak Silat,Sports,Competition,SMP-SMA,Academic,Sports,Kompetisi pencak silat nasional untuk siswa SMP dan SMA
+Lomba Karya Tulis Ilmiah (LKTI) Nasional,Writing,Competition,SMA,Academic,General,Kompetisi karya tulis ilmiah nasional untuk siswa SMA dalam berbagai bidang sains
+Lomba Esai Lingkungan Hidup,Writing,Competition,SMA,Academic,General,Kompetisi penulisan esai bertema lingkungan hidup dan keberlanjutan untuk siswa SMA
+Lomba Penulisan Cerpen Pelajar,Writing,Competition,SMP-SMA,Academic,General,Kompetisi penulisan cerpen nasional untuk siswa SMP dan SMA
+Lomba Menulis Artikel Opini,Writing,Competition,SMA,Academic,General,Kompetisi penulisan artikel opini media massa nasional untuk siswa SMA
+Beasiswa Indonesia Maju (BIM) Program Persiapan S1 Luar Negeri,Scholarship,Scholarship,SMA,Academic,General,Beasiswa fully funded Kemendikbud untuk persiapan kuliah S1 di luar negeri bagi siswa SMA berprestasi
+Beasiswa Unggulan Kemendikbud,Scholarship,Scholarship,SMA,Academic,General,Beasiswa fully funded dari Kemendikbud untuk siswa berprestasi yang akan masuk perguruan tinggi
+Beasiswa KIP Sekolah,Scholarship,Scholarship,SMP-SMA,Academic,General,Bantuan biaya pendidikan pemerintah untuk siswa SMP dan SMA dari keluarga kurang mampu
+Beasiswa PIP (Program Indonesia Pintar),Scholarship,Scholarship,SMP-SMA,Academic,General,Program beasiswa pemerintah untuk siswa SMP dan SMA dari keluarga tidak mampu
+Beasiswa Bakti Nusa SMA,Scholarship,Scholarship,SMA,Academic,General,Beasiswa untuk siswa SMA berprestasi dari keluarga prasejahtera mencakup biaya pendidikan penuh
+Beasiswa Cendekia Baznas,Scholarship,Scholarship,SMA,Academic,General,Beasiswa fully funded Baznas untuk siswa SMA berprestasi dari keluarga kurang mampu
+Beasiswa Pendidikan Pemimpin Muda,Scholarship,Scholarship,SMA,Academic,General,Beasiswa kepemimpinan untuk siswa SMA berprestasi calon pemimpin masa depan
+Beasiswa Tahfidz Quran Pelajar,Scholarship,Scholarship,SMP-SMA,Academic,General,Beasiswa untuk siswa SMP dan SMA penghafal Al-Quran berprestasi
+Beasiswa Harapan Bangsa,Scholarship,Scholarship,SMP,Academic,General,Beasiswa untuk siswa SMP berprestasi dari daerah 3T terpencil tertinggal terdepan
+Beasiswa Mentari Pelajar,Scholarship,Scholarship,SMP,Academic,General,Beasiswa untuk siswa SMP berprestasi dari keluarga prasejahtera di seluruh Indonesia
+Beasiswa Anak Guru Berprestasi,Scholarship,Scholarship,SMP-SMA,Academic,General,Beasiswa khusus putra-putri guru berprestasi untuk jenjang SMP dan SMA
+Beasiswa Prestasi Seni Budaya,Scholarship,Scholarship,SMP-SMA,Academic,Creative,Beasiswa untuk siswa SMP dan SMA berprestasi di bidang seni dan budaya
+Beasiswa Prestasi Olahraga Daerah,Scholarship,Scholarship,SMP-SMA,Academic,Sports,Beasiswa untuk siswa SMP dan SMA berprestasi di bidang olahraga
+Beasiswa Prestasi Seni Musik,Scholarship,Scholarship,SMP-SMA,Academic,Creative,Beasiswa untuk siswa SMP dan SMA berprestasi di bidang musik
+Beasiswa Cahaya Pintar,Scholarship,Scholarship,SMA,Academic,General,Beasiswa untuk siswa SMA berprestasi dari keluarga kurang mampu di seluruh Indonesia
+Beasiswa Teladan Bangsa,Scholarship,Scholarship,SMA,Academic,General,Beasiswa untuk siswa SMA yang menjadi teladan akademik dan karakter di sekolahnya
+Beasiswa Bakti BCA Pelajar,Scholarship,Scholarship,SMA,Academic,General,Beasiswa dari BCA untuk siswa SMA berprestasi dari keluarga kurang mampu
+Beasiswa Insan Berprestasi,Scholarship,Scholarship,SMA,Academic,General,Beasiswa untuk siswa SMA berprestasi secara akademik di seluruh Indonesia
+Beasiswa Prestasi Akademik Yayasan,Scholarship,Scholarship,SMA,Academic,General,Beasiswa yayasan swasta untuk siswa SMA dengan prestasi akademik luar biasa
+Beasiswa Harapan Bangsa SMA,Scholarship,Scholarship,SMA,Academic,General,Beasiswa untuk siswa SMA berprestasi calon pemimpin daerah dari keluarga kurang mampu
+Beasiswa Pendidikan BUMN,Scholarship,Scholarship,SMA,Academic,General,Beasiswa dari perusahaan BUMN untuk siswa SMA berprestasi calon karyawan masa depan
+Beasiswa Prestasi Global,Scholarship,Scholarship,SMA,Academic,International,Beasiswa untuk siswa SMA berprestasi yang memiliki kemampuan bahasa asing dan wawasan global
+Beasiswa Kader Muhammadiyah/NU,Scholarship,Scholarship,SMP-SMA,Academic,General,Beasiswa organisasi keagamaan untuk kader berprestasi tingkat SMP dan SMA
+Beasiswa Bantuan Seragam dan Buku,Scholarship,Scholarship,SMP,Academic,General,Bantuan beasiswa seragam dan buku pelajaran untuk siswa SMP dari keluarga tidak mampu
+Beasiswa Pendidikan Anak Yatim Berprestasi,Scholarship,Scholarship,SMP-SMA,Academic,General,Beasiswa fully funded untuk siswa yatim berprestasi jenjang SMP dan SMA
+Beasiswa Insan Cendekia STEM,Scholarship,Scholarship,SMA,Academic,STEM,Beasiswa fully funded untuk siswa SMA berprestasi dengan minat sains dan teknologi
+Beasiswa Generasi Inovator,Scholarship,Scholarship,SMA,Academic,Engineering,Beasiswa untuk siswa SMA berbakat di bidang rekayasa teknologi dan inovasi
+Beasiswa Pemuda Berprestasi Internasional,Scholarship,Scholarship,SMA,Academic,International,Beasiswa fully funded untuk siswa SMA berprestasi mempersiapkan karir internasional
+Beasiswa LPDP Junior Persiapan,Scholarship,Scholarship,SMA,Academic,General,Program persiapan beasiswa LPDP untuk siswa SMA berprestasi tinggi
+Beasiswa Cahaya Nusantara,Scholarship,Scholarship,SMP-SMA,Academic,General,Beasiswa nasional fully funded untuk siswa SMP dan SMA dari daerah terpencil berprestasi
+Beasiswa Prestasi Luar Biasa (BPLB),Scholarship,Scholarship,SMP-SMA,Academic,General,Beasiswa pemerintah untuk siswa SMP dan SMA dengan prestasi luar biasa di bidang akademik
