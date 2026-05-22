@@ -10,6 +10,7 @@ type User struct {
 	EmailVerifiedAt *time.Time`gorm:"column:email_verified_at" json:"email_verified_at"`
 	Password        string    `gorm:"column:password" json:"password"`
 	Role            string    `gorm:"column:role;default:student" json:"role"` // admin / student
+	Keahlian string `gorm:"column:keahlian" json:"keahlian"`
 	RememberToken   string    `gorm:"column:remember_token" json:"remember_token"`
 	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
@@ -74,7 +75,7 @@ type Beasiswa struct {
 
 type Pendaftaran struct {
 	ID            uint      `gorm:"primaryKey;column:id" json:"id"`
-	UserID        *uint     `gorm:"column:user_id" json:"user_id"`
+	UserID        uint     `gorm:"column:user_id" json:"user_id"`
 	BeasiswaID    *uint     `gorm:"column:beasiswa_id" json:"beasiswa_id"`
 	OlimpiadeID   *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
 	StatusID      *uint     `gorm:"column:status_id" json:"status_id"`

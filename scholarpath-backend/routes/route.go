@@ -10,6 +10,8 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())
+	// BUKA AKSES FOLDER UPLOADS KE PUBLIK
+	r.Static("/uploads", "./storage/uploads")
 
 	// Rute Publik (Tanpa Token)
 	r.POST("/login", controllers.LoginUser)
@@ -23,7 +25,8 @@ func SetupRouter() *gin.Engine {
 	api := r.Group("/api")
 	{
 		// AI Engine Bridge
-		api.POST("/ai/recommendation", controllers.GetAIRecommendation)
+		api.GET("/ai/recommendation", middleware.AuthMiddleware(), controllers.GetAIRecommendation)
+		api.POST("/upload", controllers.UploadFile)
 		// Kategori
 		api.POST("/kategori", controllers.CreateKategori)
 		api.GET("/kategori", controllers.GetAllKategori)

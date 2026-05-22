@@ -1,72 +1,95 @@
 package controllers
 
 import (
+	"scholarpath-backend/koneksi"
+	"scholarpath-backend/models"
 	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Struktur data yang diterima dari Frontend
-type RecommendationRequest struct {
-	UserProfile         string `json:"user_profile" binding:"required"`
-	BeasiswaRequirement string `json:"beasiswa_requirement" binding:"required"`
+// Struktur request ke Python
+type AIRequest struct {
+	UserProfile         string `json:"user_profile"`
+	BeasiswaRequirement string `json:"beasiswa_requirement"`
 }
 
-// Struktur data yang diterima dari Python AI
+// Struktur response dari Python
 type AIResponse struct {
 	Status     string  `json:"status"`
 	MatchScore float64 `json:"match_score"`
 	Message    string  `json:"message"`
 }
 
+// Struktur untuk hasil akhir yang dikirim ke Frontend
+type RecommendationResult struct {
+	Beasiswa models.Beasiswa `json:"beasiswa"`
+	MatchScore float64       `json:"match_score"`
+}
+
 func GetAIRecommendation(c *gin.Context) {
-	var input RecommendationRequest
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Data profil atau syarat beasiswa tidak valid"})
+	// 1. Ambil User ID dari Token JWT (berkat middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Anda harus login"})
 		return
 	}
 
-	// 1. Ubah data menjadi JSON untuk dikirim ke Python
-	requestBody, err := json.Marshal(input)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal memproses data untuk AI"})
+	// 2. Tarik Profil Siswa dari Database
+	var user models.User
+	if err := koneksi.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
 		return
 	}
 
-	// 2. Tembak endpoint FastAPI Python (Port 8001)
-	resp, err := http.Post("http://localhost:8001/api/match", "application/json", bytes.NewBuffer(requestBody))
-	if err != nil {
-		// Jika Python mati, akan masuk ke sini
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "AI Engine sedang offline atau tidak dapat dijangkau"})
-		return
-	}
-	defer resp.Body.Close()
-
-	// 3. Baca balasan dari Python
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membaca respons dari AI Engine"})
+	// Pastikan profil/keahlian tidak kosong
+	if user.Keahlian == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Lengkapi profil keahlian Anda terlebih dahulu sebelum mencari rekomendasi."})
 		return
 	}
 
-	// 4. Ubah JSON dari Python menjadi struct Golang
-	var aiResult AIResponse
-	if err := json.Unmarshal(body, &aiResult); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Format respons AI Engine tidak sesuai"})
-		return
+	// 3. Tarik Semua Data Beasiswa
+	var listBeasiswa []models.Beasiswa
+	koneksi.DB.Find(&listBeasiswa)
+
+	var hasilRekomendasi []RecommendationResult
+
+	// 4. Looping & Tembak ke AI Python satu per satu
+	for _, beasiswa := range listBeasiswa {
+		aiReq := AIRequest{
+			UserProfile:         user.Keahlian,
+			BeasiswaRequirement: beasiswa.Deskripsi, // Asumsi ada kolom Deskripsi di Beasiswa
+		}
+
+		reqBody, _ := json.Marshal(aiReq)
+		resp, err := http.Post("http://localhost:8001/api/match", "application/json", bytes.NewBuffer(reqBody))
+		
+		if err == nil {
+			body, _ := io.ReadAll(resp.Body)
+			var aiRes AIResponse
+			json.Unmarshal(body, &aiRes)
+			resp.Body.Close()
+
+			// Simpan hasil ke dalam array
+			hasilRekomendasi = append(hasilRekomendasi, RecommendationResult{
+				Beasiswa:   beasiswa,
+				MatchScore: aiRes.MatchScore,
+			})
+		}
 	}
 
-	// 5. Kembalikan hasil akhirnya ke Frontend
+	// 5. Urutkan dari Skor Kecocokan Tertinggi (Descending)
+	sort.Slice(hasilRekomendasi, func(i, j int) bool {
+		return hasilRekomendasi[i].MatchScore > hasilRekomendasi[j].MatchScore
+	})
+
+	// Kembalikan ke Frontend
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Kalkulasi kecocokan berhasil",
-		"data": gin.H{
-			"user_profile":         input.UserProfile,
-			"beasiswa_requirement": input.BeasiswaRequirement,
-			"ai_match_score":       aiResult.MatchScore,
-			"ai_message":           aiResult.Message,
-		},
+		"message": "Berhasil mendapatkan rekomendasi beasiswa",
+		"data":    hasilRekomendasi,
 	})
 }
