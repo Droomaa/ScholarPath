@@ -22,6 +22,8 @@ func SetupRouter() *gin.Engine {
 	// Grup Rute API (Bisa ditambahkan AuthMiddleware jika ingin semua CRUD dikunci token)
 	api := r.Group("/api")
 	{
+		// AI Engine Bridge
+		api.POST("/ai/recommendation", controllers.GetAIRecommendation)
 		// Kategori
 		api.POST("/kategori", controllers.CreateKategori)
 		api.GET("/kategori", controllers.GetAllKategori)
