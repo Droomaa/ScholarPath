@@ -1,9 +1,9 @@
 package controllers
 
 import (
-	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,8 +15,9 @@ func GetAllUser(c *gin.Context) {
 }
 
 func GetUserByID(c *gin.Context) {
+	id := c.Param("id")
 	var user models.User
-	if err := koneksi.DB.First(&user, c.Param("id")).Error; err != nil {
+	if err := koneksi.DB.First(&user, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
 		return
 	}
@@ -24,25 +25,30 @@ func GetUserByID(c *gin.Context) {
 }
 
 func UpdateUser(c *gin.Context) {
+	id := c.Param("id")
 	var user models.User
-	if err := koneksi.DB.First(&user, c.Param("id")).Error; err != nil {
+	if err := koneksi.DB.First(&user, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
 		return
 	}
+
 	if err := c.ShouldBindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
 	koneksi.DB.Save(&user)
 	c.JSON(http.StatusOK, gin.H{"message": "User berhasil diupdate", "data": user})
 }
 
 func DeleteUser(c *gin.Context) {
+	id := c.Param("id")
 	var user models.User
-	if err := koneksi.DB.First(&user, c.Param("id")).Error; err != nil {
+	if err := koneksi.DB.First(&user, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
 		return
 	}
+
 	koneksi.DB.Delete(&user)
 	c.JSON(http.StatusOK, gin.H{"message": "User berhasil dihapus"})
 }

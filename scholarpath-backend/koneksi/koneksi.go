@@ -1,20 +1,23 @@
 package koneksi
 
 import (
-	"gorm.io/driver/mysql"
+	"log"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 var DB *gorm.DB
 
 func KoneksiDatabase() {
-	// Ganti sandi, port (misal 3317), dan nama database sesuai Laragon kamu
-	dsn := "root:@tcp(127.0.0.1:3317)/beasiswa?charset=utf8mb4&parseTime=True&loc=Local"
-	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	// DSN (Data Source Name) khusus untuk PostgreSQL
+	// Sesuaikan password jika user postgres kamu menggunakan password
+	dsn := "host=localhost user=postgres password= dbname=ScholarPath port=5432 sslmode=disable TimeZone=Asia/Jakarta"
 	
+	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		panic("Gagal koneksi ke DB: " + err.Error())
+		log.Fatal("Gagal koneksi ke DB Postgres: ", err)
 	}
 	
 	DB = database
+	log.Println("Database PostgreSQL berhasil terhubung!")
 }

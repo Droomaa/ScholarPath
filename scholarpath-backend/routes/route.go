@@ -12,7 +12,6 @@ func SetupRouter() *gin.Engine {
 	r.POST("/register", controllers.RegisterUser)
 	r.POST("/login", controllers.LoginUser)
 
-	// digrupin supaya rapi
 	api := r.Group("/api")
 	{
 		// Kategori
@@ -29,13 +28,6 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/beasiswa/:id", controllers.UpdateBeasiswa)
 		api.DELETE("/beasiswa/:id", controllers.DeleteBeasiswa)
 
-		// Admin
-		api.POST("/admin", controllers.CreateAdmin)
-		api.GET("/admin", controllers.GetAllAdmin)
-		api.GET("/admin/:id", controllers.GetAdminByID)
-		api.PUT("/admin/:id", controllers.UpdateAdmin)
-		api.DELETE("/admin/:id", controllers.DeleteAdmin)
-
 		// Jenjang Pendidikan
 		api.POST("/jenjang", controllers.CreateJenjang)
 		api.GET("/jenjang", controllers.GetAllJenjang)
@@ -43,7 +35,7 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/jenjang/:id", controllers.UpdateJenjang)
 		api.DELETE("/jenjang/:id", controllers.DeleteJenjang)
 
-		// User (Khusus Data)
+		// User (Mencakup Admin dan Student)
 		api.GET("/user", controllers.GetAllUser)
 		api.GET("/user/:id", controllers.GetUserByID)
 		api.PUT("/user/:id", controllers.UpdateUser)

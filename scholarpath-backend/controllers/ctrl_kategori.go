@@ -1,37 +1,32 @@
 package controllers
 
 import (
-	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-//CREATE
 func CreateKategori(c *gin.Context) {
-	var input models.Kategori
-	if err := c.ShouldBindJSON(&input); err != nil {
+	var kategori models.Kategori
+	if err := c.ShouldBindJSON(&kategori); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := koneksi.DB.Create(&input).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan kategori"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "Kategori berhasil dibuat", "data": input})
+	koneksi.DB.Create(&kategori)
+	c.JSON(http.StatusCreated, gin.H{"data": kategori})
 }
 
 func GetAllKategori(c *gin.Context) {
-	var kategori []models.Kategori
-	koneksi.DB.Find(&kategori)
-	c.JSON(http.StatusOK, gin.H{"data": kategori})
+	var kategoris []models.Kategori
+	koneksi.DB.Find(&kategoris)
+	c.JSON(http.StatusOK, gin.H{"data": kategoris})
 }
 
 func GetKategoriByID(c *gin.Context) {
-	var kategori models.Kategori
 	id := c.Param("id")
-
+	var kategori models.Kategori
 	if err := koneksi.DB.First(&kategori, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Kategori tidak ditemukan"})
 		return
@@ -40,9 +35,8 @@ func GetKategoriByID(c *gin.Context) {
 }
 
 func UpdateKategori(c *gin.Context) {
-	var kategori models.Kategori
 	id := c.Param("id")
-
+	var kategori models.Kategori
 	if err := koneksi.DB.First(&kategori, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Kategori tidak ditemukan"})
 		return
@@ -58,14 +52,12 @@ func UpdateKategori(c *gin.Context) {
 }
 
 func DeleteKategori(c *gin.Context) {
-	var kategori models.Kategori
 	id := c.Param("id")
-
+	var kategori models.Kategori
 	if err := koneksi.DB.First(&kategori, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Kategori tidak ditemukan"})
 		return
 	}
-
 	koneksi.DB.Delete(&kategori)
 	c.JSON(http.StatusOK, gin.H{"message": "Kategori berhasil dihapus"})
 }
