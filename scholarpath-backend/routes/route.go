@@ -2,6 +2,7 @@ package routes
 
 import (
 	"scholarpath-backend/controllers"
+	"scholarpath-backend/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -9,9 +10,15 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 
-	r.POST("/register", controllers.RegisterUser)
+	// Rute Publik (Tanpa Token)
 	r.POST("/login", controllers.LoginUser)
+	r.POST("/register/siswa", controllers.RegisterSiswa)
+	r.POST("/register/instansi", controllers.RegisterInstansi)
 
+	// Rute Khusus Registrasi Admin (Wajib Token Admin)
+	r.POST("/register/admin", middleware.AuthMiddleware(), controllers.RegisterAdmin)
+
+	// Grup Rute API (Bisa ditambahkan AuthMiddleware jika ingin semua CRUD dikunci token)
 	api := r.Group("/api")
 	{
 		// Kategori
@@ -35,7 +42,7 @@ func SetupRouter() *gin.Engine {
 		api.PUT("/jenjang/:id", controllers.UpdateJenjang)
 		api.DELETE("/jenjang/:id", controllers.DeleteJenjang)
 
-		// User (Mencakup Admin dan Student)
+		// User (Mencakup data Admin, Instansi, dan Student)
 		api.GET("/user", controllers.GetAllUser)
 		api.GET("/user/:id", controllers.GetUserByID)
 		api.PUT("/user/:id", controllers.UpdateUser)

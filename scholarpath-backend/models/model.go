@@ -32,6 +32,7 @@ type Kategori struct {
 
 type Instansi struct {
 	ID        uint      `gorm:"primaryKey;column:id" json:"id"`
+	UserID    *uint     `gorm:"column:user_id" json:"user_id"`
 	Nama      string    `gorm:"column:nama" json:"nama"`
 	Alamat    string    `gorm:"column:alamat" json:"alamat"`
 	Kontak    string    `gorm:"column:kontak" json:"kontak"`
