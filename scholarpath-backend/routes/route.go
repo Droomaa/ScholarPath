@@ -9,6 +9,7 @@ import (
 
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
+	r.Use(middleware.CORSMiddleware())
 
 	// Rute Publik (Tanpa Token)
 	r.POST("/login", controllers.LoginUser)
