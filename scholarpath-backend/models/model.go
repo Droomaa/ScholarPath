@@ -2,6 +2,7 @@ package models
 
 import "time"
 
+
 type User struct {
 	ID              uint      `gorm:"primaryKey;column:id" json:"id"`
 	JenjangID       *uint     `gorm:"column:jenjang_id" json:"jenjang_id"` // Pointer agar bisa null

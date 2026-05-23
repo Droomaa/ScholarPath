@@ -10,6 +10,7 @@ import (
 func SetupRouter() *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CORSMiddleware())
+	
 	// BUKA AKSES FOLDER UPLOADS KE PUBLIK
 	r.Static("/uploads", "./storage/uploads")
 
@@ -21,59 +22,63 @@ func SetupRouter() *gin.Engine {
 	// Rute Khusus Registrasi Admin (Wajib Token Admin)
 	r.POST("/register/admin", middleware.AuthMiddleware(), controllers.RegisterAdmin)
 
-	// Grup Rute API (Bisa ditambahkan AuthMiddleware jika ingin semua CRUD dikunci token)
+	// Grup Utama API
 	api := r.Group("/api")
+	
+	// Rute Publik di bawah /api (Misal upload boleh diakses tanpa token)
+	api.POST("/upload", controllers.UploadFile) 
+
+	// Grup Rute yang Dilindungi (Wajib Token)
+	// Kita buat grup baru agar middleware benar-benar terisolasi
+	protected := api.Group("/")
+	protected.Use(middleware.AuthMiddleware())
 	{
+		// Rute User Profile
+		protected.GET("/user/profile", controllers.GetMyProfile)
+		protected.PUT("/user/profile", controllers.UpdateProfile)
+
 		// AI Engine Bridge
-		api.GET("/ai/recommendation", middleware.AuthMiddleware(), controllers.GetAIRecommendation)
-		api.POST("/upload", controllers.UploadFile)
+		protected.GET("/ai/recommendation", controllers.GetAIRecommendation)
+
 		// Kategori
-		api.POST("/kategori", controllers.CreateKategori)
-		api.GET("/kategori", controllers.GetAllKategori)
-		api.GET("/kategori/:id", controllers.GetKategoriByID)
-		api.PUT("/kategori/:id", controllers.UpdateKategori)
-		api.DELETE("/kategori/:id", controllers.DeleteKategori)
+		protected.POST("/kategori", controllers.CreateKategori)
+		protected.GET("/kategori", controllers.GetAllKategori)
+		protected.GET("/kategori/:id", controllers.GetKategoriByID)
+		protected.PUT("/kategori/:id", controllers.UpdateKategori)
+		protected.DELETE("/kategori/:id", controllers.DeleteKategori)
 
 		// Beasiswa
-		api.POST("/beasiswa", controllers.CreateBeasiswa)
-		api.GET("/beasiswa", controllers.GetAllBeasiswa)
-		api.GET("/beasiswa/:id", controllers.GetBeasiswaByID)
-		api.PUT("/beasiswa/:id", controllers.UpdateBeasiswa)
-		api.DELETE("/beasiswa/:id", controllers.DeleteBeasiswa)
+		protected.POST("/beasiswa", controllers.CreateBeasiswa)
+		protected.GET("/beasiswa", controllers.GetAllBeasiswa)
+		protected.GET("/beasiswa/:id", controllers.GetBeasiswaByID)
+		protected.PUT("/beasiswa/:id", controllers.UpdateBeasiswa)
+		protected.DELETE("/beasiswa/:id", controllers.DeleteBeasiswa)
 
 		// Jenjang Pendidikan
-		api.POST("/jenjang", controllers.CreateJenjang)
-		api.GET("/jenjang", controllers.GetAllJenjang)
-		api.GET("/jenjang/:id", controllers.GetJenjangByID)
-		api.PUT("/jenjang/:id", controllers.UpdateJenjang)
-		api.DELETE("/jenjang/:id", controllers.DeleteJenjang)
-
-		// User (Mencakup data Admin, Instansi, dan Student)
-		api.GET("/user", controllers.GetAllUser)
-		api.GET("/user/:id", controllers.GetUserByID)
-		api.PUT("/user/:id", controllers.UpdateUser)
-		api.DELETE("/user/:id", controllers.DeleteUser)
+		protected.POST("/jenjang", controllers.CreateJenjang)
+		protected.GET("/jenjang", controllers.GetAllJenjang)
+		protected.GET("/jenjang/:id", controllers.GetJenjangByID)
+		protected.PUT("/jenjang/:id", controllers.UpdateJenjang)
+		protected.DELETE("/jenjang/:id", controllers.DeleteJenjang)
 
 		// Instansi
-		api.POST("/instansi", controllers.CreateInstansi)
-		api.GET("/instansi", controllers.GetAllInstansi)
-		api.GET("/instansi/:id", controllers.GetInstansiByID)
-		api.PUT("/instansi/:id", controllers.UpdateInstansi)
-		api.DELETE("/instansi/:id", controllers.DeleteInstansi)
+		protected.GET("/instansi", controllers.GetAllInstansi)
+		protected.GET("/instansi/:id", controllers.GetInstansiByID)
+		protected.PUT("/instansi/:id", controllers.UpdateInstansi)
 
 		// Olimpiade
-		api.POST("/olimpiade", controllers.CreateOlimpiade)
-		api.GET("/olimpiade", controllers.GetAllOlimpiade)
-		api.GET("/olimpiade/:id", controllers.GetOlimpiadeByID)
-		api.PUT("/olimpiade/:id", controllers.UpdateOlimpiade)
-		api.DELETE("/olimpiade/:id", controllers.DeleteOlimpiade)
+		protected.POST("/olimpiade", controllers.CreateOlimpiade)
+		protected.GET("/olimpiade", controllers.GetAllOlimpiade)
+		protected.GET("/olimpiade/:id", controllers.GetOlimpiadeByID)
+		protected.PUT("/olimpiade/:id", controllers.UpdateOlimpiade)
+		protected.DELETE("/olimpiade/:id", controllers.DeleteOlimpiade)
 
 		// Pendaftaran
-		api.POST("/pendaftaran", controllers.CreatePendaftaran)
-		api.GET("/pendaftaran", controllers.GetAllPendaftaran)
-		api.GET("/pendaftaran/:id", controllers.GetPendaftaranByID)
-		api.PUT("/pendaftaran/:id", controllers.UpdatePendaftaran)
-		api.DELETE("/pendaftaran/:id", controllers.DeletePendaftaran)
+		protected.POST("/pendaftaran", controllers.CreatePendaftaran)
+		protected.GET("/pendaftaran", controllers.GetAllPendaftaran)
+		protected.GET("/pendaftaran/:id", controllers.GetPendaftaranByID)
+		protected.PUT("/pendaftaran/:id", controllers.UpdatePendaftaran)
+		protected.DELETE("/pendaftaran/:id", controllers.DeletePendaftaran)
 	}
 
 	return r
