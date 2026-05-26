@@ -36,6 +36,7 @@ func SetupRouter() *gin.Engine {
 		// Rute User Profile
 		protected.GET("/user/profile", controllers.GetMyProfile)
 		protected.PUT("/user/profile", controllers.UpdateProfile)
+		protected.GET("/user/pendaftaran", controllers.GetRiwayatPendaftaranSiswa)
 
 		// AI Engine Bridge
 		protected.GET("/ai/recommendation", controllers.GetAIRecommendation)
@@ -79,6 +80,10 @@ func SetupRouter() *gin.Engine {
 		protected.GET("/pendaftaran/:id", controllers.GetPendaftaranByID)
 		protected.PUT("/pendaftaran/:id", controllers.UpdatePendaftaran)
 		protected.DELETE("/pendaftaran/:id", controllers.DeletePendaftaran)
+		// protected.GET("/pendaftaran/saya", controllers.GetRiwayatPendaftaranSiswa)
+
+		protected.GET("/instansi/pendaftaran", controllers.GetInstansiApplicants)
+		protected.PUT("/pendaftaran/:id/status", controllers.UpdateApplicantStatus)
 	}
 
 	return r
