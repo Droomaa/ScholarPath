@@ -112,3 +112,16 @@ type Notification struct {
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
+
+// ==========================================
+// 5. FITUR TAMBAHAN (WISHLIST)
+// ==========================================
+
+type Wishlist struct {
+	ID          uint      `gorm:"primaryKey;column:id" json:"id"`
+	UserID      uint      `gorm:"column:user_id" json:"user_id"`
+	BeasiswaID  *uint     `gorm:"column:beasiswa_id" json:"beasiswa_id"`
+	OlimpiadeID *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}

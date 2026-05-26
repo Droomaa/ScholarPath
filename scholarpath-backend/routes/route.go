@@ -37,6 +37,11 @@ func SetupRouter() *gin.Engine {
 		protected.GET("/user/profile", controllers.GetMyProfile)
 		protected.PUT("/user/profile", controllers.UpdateProfile)
 		protected.GET("/user/pendaftaran", controllers.GetRiwayatPendaftaranSiswa)
+        
+		// --- FITUR WISHLIST SISWA ---
+		protected.POST("/user/wishlist", controllers.AddToWishlist)
+		protected.GET("/user/wishlist", controllers.GetMyWishlist)
+		protected.DELETE("/user/wishlist/:id", controllers.DeleteWishlist)
 
 		// AI Engine Bridge
 		protected.GET("/ai/recommendation", controllers.GetAIRecommendation)
