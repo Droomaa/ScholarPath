@@ -2,20 +2,38 @@ package models
 
 import "time"
 
+// ==========================================
+// 1. PENGGUNA & PROFIL
+// ==========================================
 
 type User struct {
-	ID              uint      `gorm:"primaryKey;column:id" json:"id"`
-	JenjangID       *uint     `gorm:"column:jenjang_id" json:"jenjang_id"` // Pointer agar bisa null
-	Name            string    `gorm:"column:name" json:"name"`
-	Email           string    `gorm:"column:email" json:"email"`
-	EmailVerifiedAt *time.Time`gorm:"column:email_verified_at" json:"email_verified_at"`
-	Password        string    `gorm:"column:password" json:"password"`
-	Role            string    `gorm:"column:role;default:student" json:"role"` // admin / student
-	Keahlian string `gorm:"column:keahlian" json:"keahlian"`
-	RememberToken   string    `gorm:"column:remember_token" json:"remember_token"`
-	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	ID              uint       `gorm:"primaryKey;column:id" json:"id"`
+	JenjangID       *uint      `gorm:"column:jenjang_id" json:"jenjang_id"` // Pointer agar bisa null
+	Name            string     `gorm:"column:name" json:"name"`
+	Email           string     `gorm:"column:email" json:"email"`
+	EmailVerifiedAt *time.Time `gorm:"column:email_verified_at" json:"email_verified_at"`
+	Password        string     `gorm:"column:password" json:"password"`
+	Role            string     `gorm:"column:role;default:student" json:"role"` // admin / student / instansi
+	Keahlian        string     `gorm:"column:keahlian" json:"keahlian"`
+	RememberToken   string     `gorm:"column:remember_token" json:"remember_token"`
+	CreatedAt       time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt       time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
+
+type Instansi struct {
+	ID         uint      `gorm:"primaryKey;column:id" json:"id"`
+	UserID     *uint     `gorm:"column:user_id" json:"user_id"`
+	Nama       string    `gorm:"column:nama" json:"nama"`
+	Alamat     string    `gorm:"column:alamat" json:"alamat"`
+	Kontak     string    `gorm:"column:kontak" json:"kontak"`
+	IsVerified bool      `json:"is_verified" gorm:"default:false"`
+	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+// ==========================================
+// 2. REFERENSI DATA UMUM
+// ==========================================
 
 type JenjangPendidikan struct {
 	ID        uint      `gorm:"primaryKey;column:id" json:"id"`
@@ -23,6 +41,8 @@ type JenjangPendidikan struct {
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
+
+// Memastikan nama tabel di PostgreSQL menjadi jenjang_pendidikans
 func (JenjangPendidikan) TableName() string { return "jenjang_pendidikans" }
 
 type Kategori struct {
@@ -32,15 +52,9 @@ type Kategori struct {
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
-type Instansi struct {
-	ID        uint      `gorm:"primaryKey;column:id" json:"id"`
-	UserID    *uint     `gorm:"column:user_id" json:"user_id"`
-	Nama      string    `gorm:"column:nama" json:"nama"`
-	Alamat    string    `gorm:"column:alamat" json:"alamat"`
-	Kontak    string    `gorm:"column:kontak" json:"kontak"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-}
+// ==========================================
+// 3. ENTITAS PROGRAM (OLIMPIADE & BEASISWA)
+// ==========================================
 
 type Olimpiade struct {
 	ID               uint      `gorm:"primaryKey;column:id" json:"id"`
@@ -74,13 +88,27 @@ type Beasiswa struct {
 	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
+// ==========================================
+// 4. TRANSAKSI & NOTIFIKASI
+// ==========================================
+
 type Pendaftaran struct {
 	ID            uint      `gorm:"primaryKey;column:id" json:"id"`
-	UserID        uint     `gorm:"column:user_id" json:"user_id"`
+	UserID        uint      `gorm:"column:user_id" json:"user_id"`
 	BeasiswaID    *uint     `gorm:"column:beasiswa_id" json:"beasiswa_id"`
 	OlimpiadeID   *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
 	StatusID      *uint     `gorm:"column:status_id" json:"status_id"`
 	TanggalDaftar time.Time `gorm:"column:tanggal_daftar;default:CURRENT_TIMESTAMP" json:"tanggal_daftar"`
 	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+type Notification struct {
+	ID        uint      `gorm:"primaryKey;column:id" json:"id"`
+	UserID    uint      `gorm:"column:user_id" json:"user_id"`
+	Title     string    `gorm:"column:title" json:"title"`
+	Message   string    `gorm:"column:message" json:"message"`
+	IsRead    bool      `gorm:"default:false;column:is_read" json:"is_read"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }

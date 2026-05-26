@@ -80,10 +80,19 @@ func SetupRouter() *gin.Engine {
 		protected.GET("/pendaftaran/:id", controllers.GetPendaftaranByID)
 		protected.PUT("/pendaftaran/:id", controllers.UpdatePendaftaran)
 		protected.DELETE("/pendaftaran/:id", controllers.DeletePendaftaran)
-		// protected.GET("/pendaftaran/saya", controllers.GetRiwayatPendaftaranSiswa)
 
+		// Pendaftaran Instansi
 		protected.GET("/instansi/pendaftaran", controllers.GetInstansiApplicants)
 		protected.PUT("/pendaftaran/:id/status", controllers.UpdateApplicantStatus)
+		
+		// --- RUTE KHUSUS ADMIN ---
+		protected.PUT("/admin/verify/instansi/:id", controllers.VerifyInstansi)
+		protected.PUT("/admin/verify/olimpiade/:id", controllers.VerifyOlimpiade)
+		protected.PUT("/admin/verify/beasiswa/:id", controllers.VerifyBeasiswa)
+		protected.POST("/admin/notifications", controllers.CreateNotification)
+
+		// --- RUTE NOTIFIKASI UMUM (Semua User) ---
+		protected.GET("/user/notifications", controllers.GetMyNotifications)
 	}
 
 	return r
