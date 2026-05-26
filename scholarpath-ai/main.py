@@ -1,42 +1,40 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+# IMPORT KELAS CANGGIH BUATANMU DARI ai_matcher_fix.py
+from ai_matcher_fix import ScholarPathMatcher
 
 app = FastAPI()
 
-# Memuat model di luar fungsi agar HANYA DILOAD SEKALI saat server menyala.
-# Ini mencegah server RAM bocor (memory leak) dan membuat response API sangat cepat.
-print("⏳ Mengunduh/Memuat model NLP Multilingual (Tunggu sebentar)...")
-model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-print("✅ Model AI Siap Tempur!")
+print("⏳ Sedang memuat Dataset, BM25, dan Model NLP dari ai_matcher_fix (Tunggu sebentar)...")
+# Inisialisasi model buatanmu di luar fungsi agar HANYA DILOAD SEKALI saat server menyala.
+API_KEY = "AIzaSyDzz1MW6DYV5VWzC9e_wYZqX-VSTs0ec0Y" 
+matcher = ScholarPathMatcher('new_sample_dataset.csv', API_KEY)
+print("✅ Mesin AI Hybrid (BM25 + Semantic + Gemini) Siap Tempur!")
 
-# Struktur data yang diharapkan datang dari Golang
+# Struktur data input yang akan dikirim oleh Golang
 class MatchRequest(BaseModel):
-    user_profile: str
-    beasiswa_requirement: str
+    user_skill: str
+    filter_type: str = None  # 'scholarship' atau 'competition'
+    top_k: int = 3
 
 @app.post("/api/match")
 def calculate_match(data: MatchRequest):
     try:
-        # 1. Text Embedding: Ubah kalimat menjadi deretan angka matematika (Vektor)
-        embeddings1 = model.encode([data.user_profile])
-        embeddings2 = model.encode([data.beasiswa_requirement])
+        # PANGGIL FUNGSI SEARCH() MILIKMU SENDIRI DI SINI!
+        results_df = matcher.search(
+            query=data.user_skill,
+            top_k=data.top_k,
+            filter_type=data.filter_type
+        )
         
-        # 2. Cosine Similarity: Hitung kedekatan sudut antara dua vektor teks tersebut
-        score = cosine_similarity(embeddings1, embeddings2)[0][0]
+        # FastAPI tidak bisa mengembalikan Pandas DataFrame secara langsung.
+        # Kita harus mengubahnya menjadi Dictionary / JSON.
+        results_list = results_df.to_dict(orient="records")
         
-        # 3. Konversi ke persentase (0 - 100)
-        score_percentage = round(float(score) * 100, 2)
-        
-        # Cegah nilai minus jika teks benar-benar sangat bertolak belakang
-        if score_percentage < 0:
-            score_percentage = 0.0
-            
         return {
             "status": "success",
-            "match_score": score_percentage,
-            "message": "Kalkulasi NLP berhasil dieksekusi"
+            "data": results_list,
+            "message": "Rekomendasi berhasil digenerate oleh AI Canggih!"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal memproses AI: {str(e)}")
@@ -44,4 +42,4 @@ def calculate_match(data: MatchRequest):
 # Endpoint untuk cek status server AI
 @app.get("/")
 def health_check():
-    return {"status": "AI Microservice is running smoothly"}
+    return {"status": "AI Microservice is running smoothly with ai_matcher_fix!"}
