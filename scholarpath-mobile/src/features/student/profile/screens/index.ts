@@ -1,0 +1,1 @@
+export { StudentProfileSetupScreen } from './StudentProfileSetupScreen';

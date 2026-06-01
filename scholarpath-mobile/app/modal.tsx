@@ -1,17 +1,16 @@
 import { Link } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { AuthColors, AuthTypography, FontFamily } from '@/src/theme';
 
 export default function ModalScreen() {
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title">This is a modal</ThemedText>
-      <Link href="/" dismissTo style={styles.link}>
-        <ThemedText type="link">Go to home screen</ThemedText>
+    <View style={styles.container}>
+      <Text style={styles.title}>Modal</Text>
+      <Link href="/register" style={styles.link}>
+        <Text style={styles.linkText}>Back to Register</Text>
       </Link>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -21,9 +20,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
+    backgroundColor: AuthColors.background,
+  },
+  title: {
+    fontFamily: FontFamily.bold,
+    fontSize: 24,
+    color: AuthColors.textPrimary,
   },
   link: {
-    marginTop: 15,
-    paddingVertical: 15,
+    marginTop: 16,
+  },
+  linkText: {
+    ...AuthTypography.screenSubtitle,
+    color: AuthColors.brandPrimary,
   },
 });
