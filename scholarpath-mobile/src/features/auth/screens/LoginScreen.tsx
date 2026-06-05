@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAwareScrollView } from '@/src/components/KeyboardAwareScrollView';
@@ -16,6 +16,7 @@ import { AuthColors, AuthSpacing, AuthTypography } from '@/src/theme';
 import { UserRole } from '@/src/types/shared/auth';
 import { useStudentSession } from '@/src/context/student/StudentSessionContext';
 import { useInstituteSession } from '@/src/context/institute/InstituteSessionContext';
+import { ApiError } from '@/src/services/api/client';
 import {
   validateEmail,
   validateInstituteName,
@@ -24,17 +25,20 @@ import {
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { signInAsStudent } = useStudentSession();
+  const { loginStudent } = useStudentSession();
   const { signInAsInstitute } = useInstituteSession();
   const [role, setRole] = useState<UserRole>('student');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [instituteName, setInstituteName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
+    if (isSubmitting) return;
+
     const nextErrors: Record<string, string> = {};
 
     if (role === 'institute') {
@@ -52,10 +56,22 @@ export function LoginScreen() {
     if (Object.keys(nextErrors).length > 0) return;
 
     if (role === 'student') {
-      signInAsStudent({ email: email.trim() });
-      router.replace('/(tabs)');
+      setIsSubmitting(true);
+      try {
+        await loginStudent({ email: email.trim(), password });
+        router.replace('/(tabs)');
+      } catch (error) {
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : 'Gagal masuk. Periksa koneksi internet Anda.';
+        Alert.alert('Login Gagal', message);
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
+
     signInAsInstitute({ instituteName: instituteName.trim(), email: email.trim() });
     router.replace('/(institute-tabs)' as Href);
   };

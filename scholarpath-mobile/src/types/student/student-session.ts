@@ -22,6 +22,10 @@ export type StudentProfileData = {
 export type StudentSessionState = {
   fullName: string;
   email: string;
+  userId: number | null;
+  token: string | null;
+  isAuthenticated: boolean;
+  isHydrating: boolean;
   educationLevel: EducationLevel | '';
   major: string;
   interests: string[];
@@ -39,6 +43,8 @@ export type StudentSessionContextValue = StudentSessionState & {
   setFullName: (fullName: string) => void;
   completeProfile: (profile: StudentProfileData) => void;
   signInAsStudent: (options?: { fullName?: string; email?: string }) => void;
+  registerStudent: (input: { fullName: string; email: string; password: string }) => Promise<void>;
+  loginStudent: (input: { email: string; password: string }) => Promise<void>;
   updateProfile: (
     updates: Partial<
       Pick<
@@ -63,6 +69,10 @@ export type StudentSessionContextValue = StudentSessionState & {
 export const defaultStudentSession: StudentSessionState = {
   fullName: '',
   email: '',
+  userId: null,
+  token: null,
+  isAuthenticated: false,
+  isHydrating: true,
   educationLevel: '',
   major: '',
   interests: [],

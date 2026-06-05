@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAwareScrollView } from '@/src/components/KeyboardAwareScrollView';
@@ -16,6 +16,8 @@ import {
 import { AuthColors, AuthSpacing, AuthTypography } from '@/src/theme';
 import { UserRole } from '@/src/types/shared/auth';
 import { useInstituteSession } from '@/src/context/institute/InstituteSessionContext';
+import { useStudentSession } from '@/src/context/student/StudentSessionContext';
+import { ApiError } from '@/src/services/api/client';
 import {
   validateEmail,
   validateInstituteName,
@@ -26,9 +28,11 @@ import {
 
 export function RegisterScreen() {
   const insets = useSafeAreaInsets();
+  const { registerStudent } = useStudentSession();
   const { signInAsInstitute } = useInstituteSession();
   const [role, setRole] = useState<UserRole>('student');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [fullName, setFullName] = useState('');
   const [instituteName, setInstituteName] = useState('');
@@ -48,7 +52,9 @@ export function RegisterScreen() {
     }
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (isSubmitting) return;
+
     const nextErrors: Record<string, string> = {};
 
     const emailResult = validateEmail(email);
@@ -76,12 +82,29 @@ export function RegisterScreen() {
     if (Object.keys(nextErrors).length > 0) return;
 
     if (role === 'student') {
-      router.push({
-        pathname: '/student-profile',
-        params: { fullName: fullName.trim(), email: email.trim() },
-      });
+      setIsSubmitting(true);
+      try {
+        await registerStudent({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          password,
+        });
+        router.push({
+          pathname: '/student-profile',
+          params: { fullName: fullName.trim(), email: email.trim() },
+        });
+      } catch (error) {
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : 'Gagal mendaftar. Periksa koneksi internet Anda.';
+        Alert.alert('Registrasi Gagal', message);
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
+
     signInAsInstitute({
       instituteName: instituteName.trim(),
       email: email.trim(),
