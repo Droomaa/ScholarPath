@@ -12,8 +12,14 @@ import {
   INTEREST_FIELD_OPTIONS,
   TECHNICAL_SKILL_OPTIONS,
 } from '@/src/features/student/ai-recommendation/constants/wizard-options';
-import { matchProgramsForUser } from '@/src/features/student/ai-recommendation/utils/match-programs';
 import { getProgramById } from '@/src/features/student/explore/constants/explore-programs';
+import { ApiError } from '@/src/services/api/client';
+import {
+  getAIRecommendation,
+  mapAiRecommendations,
+  resolveAiMatchingError,
+} from '@/src/services/ai';
+import { serializeKeahlian, updateProfile } from '@/src/services/profile';
 import {
   defaultAiWizardFormData,
   type AiProgramMatch,
@@ -22,11 +28,19 @@ import {
 } from '@/src/types/student/ai-recommendation';
 
 export function AiRecommendationWizardScreen() {
-  const { educationLevel, setAiRecommendationHistory, setAiRecommendationResults, setAiWizardSelections } =
-    useStudentSession();
+  const {
+    token,
+    educationLevel,
+    major,
+    setAiRecommendationHistory,
+    setAiRecommendationResults,
+    setAiWizardSelections,
+  } = useStudentSession();
   const [step, setStep] = useState<AiWizardStep>(1);
   const [formData, setFormData] = useState<AiWizardFormData>(defaultAiWizardFormData);
   const [matches, setMatches] = useState<AiProgramMatch[]>([]);
+  const [matchingError, setMatchingError] = useState<string | null>(null);
+  const [isMatching, setIsMatching] = useState(false);
 
   const updateFormData = (updates: Partial<AiWizardFormData>) => {
     setFormData((prev) => ({ ...prev, ...updates }));
@@ -50,7 +64,15 @@ export function AiRecommendationWizardScreen() {
     [formData.careerAspirations]
   );
 
-  const handleMatchingComplete = useCallback(() => {
+  const runAiRecommendation = useCallback(async () => {
+    if (!token) {
+      setMatchingError('Anda harus login untuk menggunakan rekomendasi AI.');
+      return;
+    }
+
+    setIsMatching(true);
+    setMatchingError(null);
+
     const interestLabels = formData.interestFields.map(
       (id) => INTEREST_FIELD_OPTIONS.find((item) => item.id === id)?.label ?? id
     );
@@ -60,26 +82,64 @@ export function AiRecommendationWizardScreen() {
       ),
       ...formData.customSkills,
     ];
-    setAiWizardSelections(interestLabels, skillLabels);
 
-    const results = matchProgramsForUser(formData, educationLevel);
-    setMatches(results);
-    setAiRecommendationResults(results);
+    try {
+      setAiWizardSelections(interestLabels, skillLabels);
 
-    const topProgram = getProgramById(results[0]?.programId ?? '');
-    if (topProgram && results[0]) {
-      setAiRecommendationHistory({
-        programId: results[0].programId,
-        matchPercent: results[0].matchPercent,
-        subtitle: 'Top AI recommendation based on your profile',
-        title: topProgram.title,
-        provider: topProgram.provider,
-        deadline: topProgram.deadline ?? '-',
+      const keahlian = serializeKeahlian({
+        major: major || educationLevel || undefined,
+        interests: interestLabels,
+        skills: skillLabels,
       });
-    }
 
-    setStep(6);
-  }, [educationLevel, formData, setAiRecommendationHistory, setAiRecommendationResults, setAiWizardSelections]);
+      await updateProfile(token, { keahlian });
+
+      const response = await getAIRecommendation(token);
+      const results = mapAiRecommendations(
+        response.data,
+        formData,
+        formData.opportunityTypes
+      );
+
+      setMatches(results);
+      setAiRecommendationResults(results);
+
+      const topMatch = [...results].sort((a, b) => b.matchPercent - a.matchPercent)[0];
+      const topProgram = topMatch ? getProgramById(topMatch.programId) : undefined;
+
+      if (topProgram && topMatch) {
+        setAiRecommendationHistory({
+          programId: topMatch.programId,
+          matchPercent: topMatch.matchPercent,
+          subtitle: 'Top AI recommendation based on your profile',
+          title: topProgram.title,
+          provider: topProgram.provider,
+          deadline: topProgram.deadline ?? '-',
+        });
+      }
+
+      setStep(6);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400) {
+        setMatchingError(
+          error.message ||
+            'Lengkapi profil keahlian Anda terlebih dahulu sebelum mencari rekomendasi.'
+        );
+      } else {
+        setMatchingError(resolveAiMatchingError(error));
+      }
+    } finally {
+      setIsMatching(false);
+    }
+  }, [
+    educationLevel,
+    formData,
+    major,
+    setAiRecommendationHistory,
+    setAiRecommendationResults,
+    setAiWizardSelections,
+    token,
+  ]);
 
   const handleBack = () => {
     if (step === 1) {
@@ -89,6 +149,9 @@ export function AiRecommendationWizardScreen() {
     if (step === 6) {
       setStep(4);
       return;
+    }
+    if (step === 5) {
+      setMatchingError(null);
     }
     setStep((prev) => (prev - 1) as AiWizardStep);
   };
@@ -142,7 +205,16 @@ export function AiRecommendationWizardScreen() {
   }
 
   if (step === 5) {
-    return <StepNeuralMatching onComplete={handleMatchingComplete} />;
+    return (
+      <StepNeuralMatching
+        error={matchingError}
+        isLoading={isMatching}
+        onRetry={() => {
+          void runAiRecommendation();
+        }}
+        onRunMatching={runAiRecommendation}
+      />
+    );
   }
 
   return <StepResults matches={matches} />;

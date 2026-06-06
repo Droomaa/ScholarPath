@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useNotifications } from '@/src/context/student/NotificationContext';
@@ -21,7 +22,18 @@ export function StudentNotificationScreen() {
     markAllAsRead,
     filteredNotifications,
     unreadCount,
+    refresh,
   } = useNotifications();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh]);
 
   const hasNotifications = filteredNotifications.length > 0;
 
@@ -49,7 +61,10 @@ export function StudentNotificationScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }>
         {hasNotifications ? (
           sections.map((section) => (
             <View key={section.id} style={styles.section}>

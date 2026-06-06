@@ -1,6 +1,8 @@
 import { router, type Href } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useInstituteApplicants } from '@/src/context/institute/InstituteApplicantsContext';
+import { useInstitutePrograms } from '@/src/context/institute/InstituteProgramsContext';
 import { useInstituteSession } from '@/src/context/institute/InstituteSessionContext';
 import {
   InstituteProfileHeroCard,
@@ -13,7 +15,9 @@ import { AuthColors, FontFamily } from '@/src/theme';
 
 export function InstituteProfileScreen() {
   const { instituteName, email, contactNumber, address, about, logoUri } = useInstituteSession();
-  const stats = getInstituteProfileStats();
+  const { programs } = useInstitutePrograms();
+  const { applicants } = useInstituteApplicants();
+  const stats = getInstituteProfileStats(programs, applicants);
 
   return (
     <View style={styles.screen}>

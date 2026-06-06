@@ -1,7 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useInstituteApplicants } from '@/src/context/institute/InstituteApplicantsContext';
+import { useInstitutePrograms } from '@/src/context/institute/InstituteProgramsContext';
 import { useInstituteSession } from '@/src/context/institute/InstituteSessionContext';
 import {
   ApplicationsChart,
@@ -10,15 +13,19 @@ import {
   StatCard,
   UpcomingDeadlineItem,
 } from '@/src/features/institute/components';
-import { getInstituteStats } from '@/src/features/institute/constants/institute-applicants';
-import { getActiveProgramsForDeadlines } from '@/src/features/institute/constants/institute-programs';
+import { computeInstituteDashboardStats } from '@/src/services/institute';
 import { AuthColors, FontFamily } from '@/src/theme';
 
 export function InstituteDashboardScreen() {
   const { instituteName, memberSince } = useInstituteSession();
-  const stats = getInstituteStats();
+  const { applicants } = useInstituteApplicants();
+  const { programs, getActiveProgramsForDeadlines } = useInstitutePrograms();
+  const stats = useMemo(
+    () => computeInstituteDashboardStats(programs, applicants),
+    [programs, applicants]
+  );
   const upcomingPrograms = getActiveProgramsForDeadlines();
-  const displayName = instituteName || 'Global Tech Academy';
+  const displayName = instituteName || 'Institusi';
   const analyticsMemberSince = memberSince || new Date().toISOString();
 
   return (
@@ -39,21 +46,21 @@ export function InstituteDashboardScreen() {
 
         <View style={styles.statsGrid}>
           <View style={styles.statsRow}>
-            <StatCard label="Active Programs" value={stats.activePrograms} badge="+2" />
-            <StatCard label="Total Applicants" value={stats.totalApplicants} badge="+14%" />
+            <StatCard label="Active Programs" value={stats.activePrograms} />
+            <StatCard label="Total Applicants" value={stats.totalApplicants} />
           </View>
           <View style={styles.statsRow}>
             <StatCard
               label="Pending Reviews"
-              value={stats.pendingReviews}
-              badge="High"
+              value={stats.pendingApplicants}
+              badge={stats.pendingApplicants > 0 ? 'High' : undefined}
               badgeBg="#FFFBEB"
               badgeColor="#D97706"
             />
             <StatCard
               label="Accepted"
-              value={stats.accepted}
-              badge="Global"
+              value={stats.acceptedApplicants}
+              badge={stats.rejectedApplicants > 0 ? `${stats.rejectedApplicants} rejected` : undefined}
               badgeBg="rgba(70, 72, 212, 0.1)"
               badgeColor="#4648D4"
             />
@@ -97,13 +104,19 @@ export function InstituteDashboardScreen() {
             </Text>
           </View>
           <View style={styles.deadlineList}>
-            {upcomingPrograms.map((program) => (
-              <UpcomingDeadlineItem
-                key={program.id}
-                program={program}
-                onPress={() => router.push(`/institute-program/${program.id}` as Href)}
-              />
-            ))}
+            {upcomingPrograms.length === 0 ? (
+              <Text style={styles.emptyDeadlineText}>
+                Belum ada program aktif dengan tenggat terdekat.
+              </Text>
+            ) : (
+              upcomingPrograms.map((program) => (
+                <UpcomingDeadlineItem
+                  key={program.id}
+                  program={program}
+                  onPress={() => router.push(`/institute-program/${program.id}` as Href)}
+                />
+              ))
+            )}
           </View>
         </View>
       </ScrollView>
@@ -190,5 +203,11 @@ const styles = StyleSheet.create({
   },
   deadlineList: {
     gap: 12,
+  },
+  emptyDeadlineText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: AuthColors.textSecondary,
   },
 });

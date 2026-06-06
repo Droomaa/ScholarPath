@@ -14,9 +14,9 @@ import {
   ProgramStatCalendarIcon,
   ProgramStatPeopleIcon,
 } from '@/src/features/institute/components';
+import { useInstitutePrograms } from '@/src/context/institute/InstituteProgramsContext';
 import {
   formatProgramDeadlineFull,
-  getInstituteProgramById,
   isProgramOverfilled,
 } from '@/src/features/institute/constants/institute-programs';
 import { AuthColors, FontFamily } from '@/src/theme';
@@ -25,7 +25,8 @@ import { type InstituteProgramDocument } from '@/src/types/institute/institute';
 export function InstituteProgramDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const program = getInstituteProgramById(id ?? '');
+  const { getProgramById } = useInstitutePrograms();
+  const program = getProgramById(id ?? '');
   const [selectedDocument, setSelectedDocument] = useState<InstituteProgramDocument | null>(null);
 
   if (!program) {

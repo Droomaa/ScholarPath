@@ -5,6 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExploreProgram } from '@/src/types/shared/program';
 import { getProgramRewardInfo } from '@/src/features/student/program/utils/format-prize';
+import {
+  getUserFacingDescription,
+  isDisplayableMetric,
+} from '@/src/services/explore/sanitize-explore-program';
+import { buildProgramMetadataItems } from '@/src/features/student/program/utils/build-program-requirements';
 import { AuthColors, AuthTypography, FontFamily } from '@/src/theme';
 
 type ProgramTitleCardProps = {
@@ -36,11 +41,29 @@ type ProgramKeyInfoRowProps = {
 export function ProgramKeyInfoRow({ program }: ProgramKeyInfoRowProps) {
   const reward = getProgramRewardInfo(program);
 
-  const items = [
-    { label: 'DEADLINE', value: program.deadline ?? '-', icon: 'calendar-outline' as const },
-    { label: 'KUOTA', value: program.quota ?? '-', icon: 'people-outline' as const },
-    { label: reward.label, value: reward.value, icon: reward.icon },
-  ];
+  type KeyInfoItem = {
+    label: string;
+    value: string;
+    icon: 'calendar-outline' | 'people-outline' | 'trophy-outline' | 'wallet-outline';
+  };
+
+  const items: KeyInfoItem[] = [];
+
+  if (isDisplayableMetric(program.deadline)) {
+    items.push({ label: 'DEADLINE', value: program.deadline!, icon: 'calendar-outline' });
+  }
+
+  if (isDisplayableMetric(program.quota)) {
+    items.push({ label: 'KUOTA', value: program.quota!, icon: 'people-outline' });
+  }
+
+  if (reward && isDisplayableMetric(reward.value)) {
+    items.push({ label: reward.label, value: reward.value, icon: reward.icon });
+  }
+
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
     <View style={styles.keyInfoRow}>
@@ -60,7 +83,7 @@ type ProgramDescriptionSectionProps = {
 };
 
 export function ProgramDescriptionSection({ program }: ProgramDescriptionSectionProps) {
-  const text = program.longDescription ?? program.description;
+  const text = getUserFacingDescription(program.longDescription ?? program.description);
 
   return (
     <LinearGradient
@@ -76,21 +99,43 @@ export function ProgramDescriptionSection({ program }: ProgramDescriptionSection
 }
 
 type ProgramRequirementsListProps = {
-  requirements: string[];
+  program: ExploreProgram;
 };
 
-export function ProgramRequirementsList({ requirements }: ProgramRequirementsListProps) {
+export function ProgramRequirementsList({ program }: ProgramRequirementsListProps) {
+  const metadataItems = buildProgramMetadataItems(program);
+  const hasMetadata = metadataItems.length > 0;
+  const hasRequirements = program.requirements.length > 0;
+
+  if (!hasMetadata && !hasRequirements) {
+    return null;
+  }
+
   return (
     <View style={styles.requirementsSection}>
       <Text style={styles.requirementsTitle}>Persyaratan Umum</Text>
-      <View style={styles.requirementsList}>
-        {requirements.map((requirement) => (
-          <View key={requirement} style={styles.requirementItem}>
-            <Ionicons name="checkmark-circle" size={20} color={AuthColors.profileBrand} />
-            <Text style={styles.requirementText}>{requirement}</Text>
-          </View>
-        ))}
-      </View>
+
+      {hasMetadata ? (
+        <View style={styles.metadataGrid}>
+          {metadataItems.map((item) => (
+            <View key={item.key} style={styles.metadataCard}>
+              <Text style={styles.metadataLabel}>{item.label}</Text>
+              <Text style={styles.metadataValue}>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {hasRequirements ? (
+        <View style={styles.requirementsList}>
+          {program.requirements.map((requirement) => (
+            <View key={requirement} style={styles.requirementItem}>
+              <Ionicons name="checkmark-circle" size={20} color={AuthColors.profileBrand} />
+              <Text style={styles.requirementText}>{requirement}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -250,6 +295,34 @@ const styles = StyleSheet.create({
   },
   requirementsList: {
     gap: 16,
+  },
+  metadataGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  metadataCard: {
+    minWidth: '47%',
+    flexGrow: 1,
+    backgroundColor: '#F5F2FE',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 4,
+  },
+  metadataLabel: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: AuthColors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  metadataValue: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 14,
+    lineHeight: 20,
+    color: AuthColors.textPrimary,
   },
   requirementItem: {
     flexDirection: 'row',

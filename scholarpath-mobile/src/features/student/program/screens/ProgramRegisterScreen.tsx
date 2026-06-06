@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +14,8 @@ import {
 } from 'react-native';
 
 import { useApplications } from '@/src/context/shared/ApplicationContext';
-import { getProgramById } from '@/src/features/student/explore/constants/explore-programs';
+import { useStudentSession } from '@/src/context/student/StudentSessionContext';
+import { useProgramById } from '@/src/hooks/useProgramById';
 import {
   DocumentUploadCard,
   EligibilityTermsSection,
@@ -24,6 +26,9 @@ import {
 import { formatDaysLeftLabel } from '@/src/features/student/program/utils/deadline-countdown';
 import { pickPdfDocument } from '@/src/features/student/program/utils/pick-pdf-document';
 import { getProgramRegistrationConfig } from '@/src/features/student/program/utils/program-registration-config';
+import { ApiError } from '@/src/services/api/client';
+import { parseProgramCompositeId, parsedProgramIdToApiPayload } from '@/src/services/explore';
+import { createPendaftaran } from '@/src/services/registration';
 import { type ActiveProgramStatus } from '@/src/types/shared/application';
 import {
   type ProgramRegistrationDraft,
@@ -58,17 +63,20 @@ function resolveActiveProgramStatus(
 
 export function ProgramRegisterScreen() {
   const { id, activeId } = useLocalSearchParams<{ id: string; activeId?: string }>();
+  const { token } = useStudentSession();
+  const { program, isLoading, error } = useProgramById(id ?? '');
   const {
     activePrograms,
     upsertActiveProgram,
     findActiveProgramByProgramId,
     saveRegistrationDraft,
     getRegistrationDraft,
-    submitApplication,
+    removeActiveProgram,
+    refreshRegistrations,
     updateActiveProgramStatus,
   } = useApplications();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const program = getProgramById(id ?? '');
   const registrationConfig = program ? getProgramRegistrationConfig(program) : null;
 
   const requiredDocumentIds = useMemo(
@@ -109,10 +117,18 @@ export function ProgramRegisterScreen() {
     return program ? findActiveProgramByProgramId(program.id) : undefined;
   }, [activeId, activePrograms, program?.id]);
 
+  if (isLoading) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={AuthColors.profileBrand} />
+      </View>
+    );
+  }
+
   if (!program || !registrationConfig) {
     return (
       <View style={[styles.screen, styles.centered]}>
-        <Text style={styles.notFound}>Program tidak ditemukan.</Text>
+        <Text style={styles.notFound}>{error ?? 'Program tidak ditemukan.'}</Text>
         <Pressable onPress={() => router.back()}>
           <Text style={styles.backLink}>Kembali</Text>
         </Pressable>
@@ -172,7 +188,7 @@ export function ProgramRegisterScreen() {
     router.replace('/(tabs)/application' as Href);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!isSubmitReady) {
       Alert.alert(
         'Form belum lengkap',
@@ -188,37 +204,39 @@ export function ProgramRegisterScreen() {
       return;
     }
 
-    submitApplication(activeIdToUse, {
-      id: `registration-${program.id}-${Date.now()}`,
-      title: program.title,
-      provider: program.provider,
-      categoryTag: program.categoryTag,
-      status: 'review',
-      reviewProgress: 25,
-      reviewLabel: 'Dokumen sedang direview',
-      programId: program.id,
-      submittedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      timeline: [
-        {
-          title: 'Dokumen Dikirim',
-          subtitle: 'Aplikasi berhasil disubmit',
-          status: 'done',
-        },
-        {
-          title: 'Review Admin',
-          subtitle: 'Tim penyelenggara memverifikasi dokumen',
-          status: 'active',
-        },
-        {
-          title: 'Pengumuman Hasil',
-          subtitle: 'Menunggu keputusan final',
-          status: 'pending',
-        },
-      ],
-    });
+    if (!token) {
+      Alert.alert('Login diperlukan', 'Silakan login untuk mendaftar program.');
+      return;
+    }
 
-    router.replace('/application' as Href);
+    const parsed = parseProgramCompositeId(program.id);
+    if (!parsed) {
+      Alert.alert('Error', 'Program tidak valid.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await createPendaftaran(token, parsedProgramIdToApiPayload(parsed));
+      removeActiveProgram(activeIdToUse);
+      await refreshRegistrations();
+
+      Alert.alert('Berhasil', 'Pendaftaran berhasil dikirim.', [
+        {
+          text: 'OK',
+          onPress: () => router.replace('/application' as Href),
+        },
+      ]);
+    } catch (submitError) {
+      const message =
+        submitError instanceof ApiError
+          ? submitError.message
+          : 'Gagal mengirim pendaftaran. Coba lagi.';
+      Alert.alert('Pendaftaran gagal', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -288,8 +306,11 @@ export function ProgramRegisterScreen() {
 
       <RegistrationFooter
         onSaveDraftPress={handleSaveDraft}
-        onSubmitPress={handleSubmit}
+        onSubmitPress={() => {
+          void handleSubmit();
+        }}
         submitDisabled={!isSubmitReady}
+        isSubmitting={isSubmitting}
       />
     </KeyboardAvoidingView>
   );

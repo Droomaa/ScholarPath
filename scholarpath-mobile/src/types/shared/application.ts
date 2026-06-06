@@ -70,4 +70,6 @@ export type ApplicationContextValue = ApplicationState & {
     status: RegistrationStatus,
     updates?: RegistrationStatusUpdate
   ) => void;
+  refreshRegistrations: () => Promise<void>;
+  isLoadingRegistrations: boolean;
 };

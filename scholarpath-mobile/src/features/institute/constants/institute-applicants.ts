@@ -1,9 +1,10 @@
-import { INSTITUTE_PROGRAMS } from '@/src/features/institute/constants/institute-programs';
-import { type ApplicantStatus, type InstituteApplicant } from '@/src/types/institute/institute';
+import { type ApplicantStatus, type InstituteApplicant, type InstituteProgram } from '@/src/types/institute/institute';
+import { applicantMatchesProgram } from '@/src/services/institute/map-institute-programs';
 
 export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   {
     id: 'app-1',
+    pendaftaranId: 1,
     name: 'Andi Saputra',
     major: 'Science',
     programId: 'prog-tech-innovators',
@@ -14,6 +15,7 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
   {
     id: 'app-2',
+    pendaftaranId: 2,
     name: 'Siti Rahmawati',
     major: 'Language',
     programId: 'prog-leadership-award',
@@ -22,6 +24,7 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
   {
     id: 'app-3',
+    pendaftaranId: 3,
     name: 'Budi Hartono',
     major: 'Social',
     programId: 'prog-women-stem',
@@ -30,6 +33,7 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
   {
     id: 'app-4',
+    pendaftaranId: 4,
     name: 'Dewi Lestari',
     major: 'STEM',
     programId: 'prog-stem-fellowship',
@@ -39,6 +43,7 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
   {
     id: 'app-5',
+    pendaftaranId: 5,
     name: 'Amara Syarianti',
     major: 'STEM',
     programId: 'prog-stem-fellowship',
@@ -48,6 +53,7 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
   {
     id: 'app-6',
+    pendaftaranId: 6,
     name: 'Maya Anggraini',
     major: 'Arts',
     programId: 'prog-digital-leadership',
@@ -56,6 +62,7 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
   {
     id: 'app-7',
+    pendaftaranId: 7,
     name: 'Fajar Nugroho',
     major: 'Science',
     programId: 'prog-tech-innovators',
@@ -65,6 +72,7 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
   {
     id: 'app-8',
+    pendaftaranId: 8,
     name: 'Putri Maharani',
     major: 'Social',
     programId: 'prog-leadership-award',
@@ -74,26 +82,29 @@ export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
   },
 ];
 
-export const APPLICANT_PROGRAM_FILTERS = [
-  { id: 'all', label: 'All Programs' },
-  ...INSTITUTE_PROGRAMS.map((program) => ({
-    id: program.id,
-    label: program.title.length > 18 ? `${program.title.slice(0, 16)}…` : program.title,
-  })),
-];
-
 export function filterApplicants(
   applicants: InstituteApplicant[],
   options: {
-  status?: ApplicantStatus | 'all';
-  programId?: string;
-  query?: string;
-}) {
-  const { status = 'all', programId, query = '' } = options;
+    status?: ApplicantStatus | 'all';
+    programId?: string;
+    query?: string;
+    programs?: InstituteProgram[];
+  }
+) {
+  const { status = 'all', programId, query = '', programs = [] } = options;
 
   return applicants.filter((applicant) => {
     if (status !== 'all' && applicant.status !== status) return false;
-    if (programId && programId !== 'all' && applicant.programId !== programId) return false;
+
+    if (programId && programId !== 'all') {
+      const matchedProgram = programs.find((program) => program.id === programId);
+      if (matchedProgram) {
+        if (!applicantMatchesProgram(applicant, matchedProgram)) return false;
+      } else if (applicant.programId !== programId) {
+        return false;
+      }
+    }
+
     if (query.trim()) {
       const q = query.trim().toLowerCase();
       return (

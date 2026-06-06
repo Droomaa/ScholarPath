@@ -1,4 +1,4 @@
-export { login, registerSiswa } from '@/src/services/auth/auth-api';
+export { login, registerInstansi, registerSiswa } from '@/src/services/auth/auth-api';
 export {
   clearAuthSession,
   getStoredAuthSession,

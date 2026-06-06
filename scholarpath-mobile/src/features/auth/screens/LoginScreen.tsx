@@ -17,48 +17,65 @@ import { UserRole } from '@/src/types/shared/auth';
 import { useStudentSession } from '@/src/context/student/StudentSessionContext';
 import { useInstituteSession } from '@/src/context/institute/InstituteSessionContext';
 import { ApiError } from '@/src/services/api/client';
-import {
-  validateEmail,
-  validateInstituteName,
-  validatePassword,
-} from '@/src/utils/form-validation';
+import { validateEmail, validatePassword } from '@/src/utils/form-validation';
+
+type LoginFormState = {
+  email: string;
+  password: string;
+};
+
+const emptyLoginForm = (): LoginFormState => ({ email: '', password: '' });
 
 export function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { loginStudent } = useStudentSession();
-  const { signInAsInstitute } = useInstituteSession();
+  const { loginInstitute } = useInstituteSession();
   const [role, setRole] = useState<UserRole>('student');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [instituteName, setInstituteName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [studentForm, setStudentForm] = useState<LoginFormState>(emptyLoginForm);
+  const [instituteForm, setInstituteForm] = useState<LoginFormState>(emptyLoginForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const activeForm = role === 'student' ? studentForm : instituteForm;
+  const setActiveForm = (updates: Partial<LoginFormState>) => {
+    if (role === 'student') {
+      setStudentForm((prev) => ({ ...prev, ...updates }));
+      return;
+    }
+
+    setInstituteForm((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleRoleChange = (nextRole: UserRole) => {
+    setRole(nextRole);
+    setErrors({});
+    setShowPassword(false);
+  };
 
   const handleSignIn = async () => {
     if (isSubmitting) return;
 
     const nextErrors: Record<string, string> = {};
-
-    if (role === 'institute') {
-      const nameResult = validateInstituteName(instituteName);
-      if (!nameResult.valid) nextErrors.instituteName = nameResult.message ?? '';
-    }
-
-    const emailResult = validateEmail(email);
+    const emailResult = validateEmail(activeForm.email);
     if (!emailResult.valid) nextErrors.email = emailResult.message ?? '';
 
-    const passwordResult = validatePassword(password);
+    const passwordResult = validatePassword(activeForm.password);
     if (!passwordResult.valid) nextErrors.password = passwordResult.message ?? '';
 
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
+    const credentials = {
+      email: activeForm.email.trim(),
+      password: activeForm.password,
+    };
+
     if (role === 'student') {
       setIsSubmitting(true);
       try {
-        await loginStudent({ email: email.trim(), password });
+        await loginStudent(credentials);
         router.replace('/(tabs)');
       } catch (error) {
         const message =
@@ -72,8 +89,19 @@ export function LoginScreen() {
       return;
     }
 
-    signInAsInstitute({ instituteName: instituteName.trim(), email: email.trim() });
-    router.replace('/(institute-tabs)' as Href);
+    setIsSubmitting(true);
+    try {
+      await loginInstitute(credentials);
+      router.replace('/(institute-tabs)' as Href);
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Gagal masuk. Periksa koneksi internet Anda.';
+      Alert.alert('Login Gagal', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -96,35 +124,22 @@ export function LoginScreen() {
             </Text>
           </View>
 
-          <RoleSelector role={role} onRoleChange={setRole} variant="login" />
+          <RoleSelector role={role} onRoleChange={handleRoleChange} variant="login" />
 
-          <View style={styles.fields}>
-            {role === 'institute' ? (
-              <AuthTextField
-                label="Institute Name"
-                icon="business-outline"
-                placeholder="Enter institute name"
-                value={instituteName}
-                onChangeText={(text) => {
-                  setInstituteName(text);
-                  if (errors.instituteName) setErrors((prev) => ({ ...prev, instituteName: '' }));
-                }}
-                autoCapitalize="words"
-                error={errors.instituteName}
-              />
-            ) : null}
-
+          <View key={role} style={styles.fields}>
             <AuthTextField
               label="Email Address"
               icon="mail-outline"
               placeholder="Enter Email Address"
-              value={email}
+              value={activeForm.email}
               onChangeText={(text) => {
-                setEmail(text);
+                setActiveForm({ email: text });
                 if (errors.email) setErrors((prev) => ({ ...prev, email: '' }));
               }}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
+              textContentType="emailAddress"
               error={errors.email}
             />
 
@@ -132,14 +147,16 @@ export function LoginScreen() {
               label="Password"
               icon="lock-closed-outline"
               placeholder="Enter Password"
-              value={password}
+              value={activeForm.password}
               onChangeText={(text) => {
-                setPassword(text);
+                setActiveForm({ password: text });
                 if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
               }}
               showPasswordToggle
               isPasswordVisible={showPassword}
               onTogglePassword={() => setShowPassword((prev) => !prev)}
+              autoComplete="password"
+              textContentType="password"
               error={errors.password}
             />
 

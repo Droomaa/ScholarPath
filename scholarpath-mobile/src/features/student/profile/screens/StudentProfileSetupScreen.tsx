@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAwareScrollView } from '@/src/components/KeyboardAwareScrollView';
@@ -17,11 +17,13 @@ import {
 } from '@/src/features/student/profile/components';
 import {
   EDUCATION_LEVELS,
+  getMajorOptions,
   INTERESTS_BY_CATEGORY,
-  MAJORS,
+  requiresMajor,
   SKILLS_BY_CATEGORY,
 } from '@/src/features/student/profile/constants/profile-options';
 import { useStudentSession } from '@/src/context/student/StudentSessionContext';
+import { ApiError } from '@/src/services/api/client';
 import { AuthColors } from '@/src/theme';
 
 function calculateProgress(
@@ -62,8 +64,10 @@ export function StudentProfileSetupScreen() {
 
   const [educationPickerVisible, setEducationPickerVisible] = useState(false);
   const [majorPickerVisible, setMajorPickerVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const showMajorField = educationLevel === 'SMA';
+  const showMajorField = requiresMajor(educationLevel);
+  const majorOptions = getMajorOptions(educationLevel);
 
   const progress = useMemo(
     () => calculateProgress(fullName, educationLevel, major, interests, skills),
@@ -73,29 +77,38 @@ export function StudentProfileSetupScreen() {
   const canSave =
     fullName.trim().length > 0 &&
     !!educationLevel &&
-    (educationLevel === 'SMP' || !!major) &&
+    (!requiresMajor(educationLevel) || !!major) &&
     interests.length >= 3 &&
     skills.length >= 1;
 
   const handleEducationSelect = (level: string) => {
     setEducationLevel(level);
-    if (level === 'SMP') {
-      setMajor('');
-    }
+    setMajor('');
   };
 
-  const handleSave = () => {
-    if (!canSave) return;
-    completeProfile({
-      fullName: fullName.trim(),
-      email: initialEmail?.trim(),
-      educationLevel: educationLevel as 'SMP' | 'SMA',
-      major: educationLevel === 'SMA' ? major : undefined,
-      interests,
-      skills,
-    });
-    // TODO: persist profile via API
-    router.replace('/(tabs)');
+  const handleSave = async () => {
+    if (!canSave || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await completeProfile({
+        fullName: fullName.trim(),
+        email: initialEmail?.trim(),
+        educationLevel: educationLevel as 'SMP' | 'SMA' | 'SMK',
+        major: requiresMajor(educationLevel) ? major : undefined,
+        interests,
+        skills,
+      });
+      router.replace('/(tabs)');
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Gagal menyimpan profil. Periksa koneksi internet Anda.';
+      Alert.alert('Simpan Profil Gagal', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -127,8 +140,8 @@ export function StudentProfileSetupScreen() {
 
             {showMajorField ? (
               <ProfileSelectField
-                label="Jurusan"
-                placeholder="Pilih Jurusan"
+                label="Jurusan / Program Studi"
+                placeholder="Pilih Jurusan / Program Studi"
                 value={major}
                 onPress={() => setMajorPickerVisible(true)}
               />
@@ -152,7 +165,7 @@ export function StudentProfileSetupScreen() {
           </View>
       </KeyboardAwareScrollView>
 
-      <ProfileSaveButton onPress={handleSave} disabled={!canSave} />
+      <ProfileSaveButton onPress={handleSave} disabled={!canSave || isSubmitting} />
 
       <OptionPickerModal
         visible={educationPickerVisible}
@@ -165,8 +178,8 @@ export function StudentProfileSetupScreen() {
 
       <OptionPickerModal
         visible={majorPickerVisible}
-        title="Pilih Jurusan"
-        options={MAJORS}
+        title="Pilih Jurusan / Program Studi"
+        options={majorOptions}
         selectedValue={major}
         onClose={() => setMajorPickerVisible(false)}
         onSelect={setMajor}

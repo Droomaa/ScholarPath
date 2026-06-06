@@ -31,11 +31,20 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError(
+      `Tidak dapat terhubung ke server (${API_BASE_URL}). Pastikan backend sudah jalan dan IP di api.ts sesuai Wi-Fi kamu.`,
+      0
+    );
+  }
 
   let payload: unknown = null;
   const contentType = response.headers.get('content-type') ?? '';

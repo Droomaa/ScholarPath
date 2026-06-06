@@ -1,7 +1,15 @@
 import { router, type Href } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
+import { useExplorePrograms } from '@/src/context/student/ExploreProgramsContext';
 import { useStudentSession } from '@/src/context/student/StudentSessionContext';
 import {
   CategoryChips,
@@ -12,10 +20,7 @@ import {
   SortOption,
   SortToggle,
 } from '@/src/features/student/explore/components';
-import {
-  EXPLORE_PROGRAMS,
-  getJenjangOptions,
-} from '@/src/features/student/explore/constants/explore-programs';
+import { getJenjangOptions } from '@/src/features/student/explore/constants/explore-programs';
 import { HomeTopBar } from '@/src/features/student/home/components';
 import { EducationLevel } from '@/src/types/shared/program';
 import { AuthColors, AuthTypography } from '@/src/theme';
@@ -35,6 +40,9 @@ function getDefaultJenjang(
 
 export function StudentExploreScreen() {
   const { educationLevel } = useStudentSession();
+  const { programs, isLoading, refresh } = useExplorePrograms();
+  const [refreshing, setRefreshing] = useState(false);
+
   const jenjangOptions = useMemo(
     () => getJenjangOptions(educationLevel),
     [educationLevel]
@@ -50,7 +58,7 @@ export function StudentExploreScreen() {
   const filteredPrograms = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    let results = EXPLORE_PROGRAMS.filter((program) =>
+    let results = programs.filter((program) =>
       program.educationLevels.includes(selectedJenjang)
     );
 
@@ -69,14 +77,28 @@ export function StudentExploreScreen() {
     return [...results].sort((a, b) =>
       sortBy === 'terbaru' ? b.sortDate - a.sortDate : b.popularity - a.popularity
     );
-  }, [category, searchQuery, selectedJenjang, sortBy]);
+  }, [category, programs, searchQuery, selectedJenjang, sortBy]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refresh]);
+
+  const showInitialLoader = isLoading && programs.length === 0;
 
   return (
     <View style={styles.screen}>
       <HomeTopBar />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }>
         <View style={styles.header}>
           <Text style={styles.title}>Eksplorasi</Text>
           <Text style={styles.subtitle}>
@@ -95,7 +117,13 @@ export function StudentExploreScreen() {
         <SortToggle selected={sortBy} onSelect={setSortBy} />
 
         <View style={styles.list}>
-          {filteredPrograms.length === 0 ? (
+          {showInitialLoader ? (
+            <ActivityIndicator
+              size="large"
+              color={AuthColors.profileBrand}
+              style={styles.loader}
+            />
+          ) : filteredPrograms.length === 0 ? (
             <Text style={styles.emptyText}>Tidak ada program yang ditemukan.</Text>
           ) : (
             filteredPrograms.map((program) => (
@@ -140,6 +168,9 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 16,
+  },
+  loader: {
+    paddingVertical: 24,
   },
   emptyText: {
     ...AuthTypography.profileInput,

@@ -1,8 +1,32 @@
 import { CategoryOption, ProfileCategory } from '../types/student-profile';
 
-export const EDUCATION_LEVELS = ['SMP', 'SMA'] as const;
+export const EDUCATION_LEVELS = ['SMP', 'SMA', 'SMK'] as const;
 
-export const MAJORS = ['IPA', 'IPS', 'Language and Arts'] as const;
+export const SMA_MAJORS = ['IPA', 'IPS', 'Bahasa'] as const;
+
+export const SMK_MAJORS = [
+  'RPL (Rekayasa Perangkat Lunak)',
+  'TKJ (Teknik Komputer dan Jaringan)',
+  'DKV (Desain Komunikasi Visual)',
+  'Multimedia',
+  'Akuntansi',
+  'Manajemen Perkantoran',
+  'Pemasaran',
+  'Tata Boga',
+  'Perhotelan',
+] as const;
+
+export type MajorOption = (typeof SMA_MAJORS)[number] | (typeof SMK_MAJORS)[number];
+
+export function getMajorOptions(educationLevel: string): readonly string[] {
+  if (educationLevel === 'SMA') return SMA_MAJORS;
+  if (educationLevel === 'SMK') return SMK_MAJORS;
+  return [];
+}
+
+export function requiresMajor(educationLevel: string): boolean {
+  return educationLevel === 'SMA' || educationLevel === 'SMK';
+}
 
 export const PROFILE_CATEGORIES: CategoryOption[] = [
   { id: 'science', label: 'Science' },

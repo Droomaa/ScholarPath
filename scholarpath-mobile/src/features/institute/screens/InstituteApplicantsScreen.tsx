@@ -1,8 +1,18 @@
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { useInstituteApplicants } from '@/src/context/institute/InstituteApplicantsContext';
+import { useInstitutePrograms } from '@/src/context/institute/InstituteProgramsContext';
 import {
   ApplicantCard,
   ApplicantFilterChips,
@@ -10,11 +20,8 @@ import {
   ApplicantStatsGrid,
   InstituteTopBar,
 } from '@/src/features/institute/components';
-import {
-  APPLICANT_PROGRAM_FILTERS,
-  filterApplicants,
-  getInstituteStats,
-} from '@/src/features/institute/constants/institute-applicants';
+import { buildApplicantProgramFilters, getApplicantListStats } from '@/src/services/institute';
+import { filterApplicants } from '@/src/features/institute/constants/institute-applicants';
 import { type ApplicantStatus } from '@/src/types/institute/institute';
 import { AuthColors, FontFamily } from '@/src/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +29,14 @@ import { Ionicons } from '@expo/vector-icons';
 const PAGE_SIZE = 5;
 
 export function InstituteApplicantsScreen() {
-  const { applicants } = useInstituteApplicants();
+  const {
+    applicants,
+    isLoading,
+    isRefreshing,
+    error,
+    refreshApplicants,
+  } = useInstituteApplicants();
+  const { programs } = useInstitutePrograms();
   const { status: statusParam, program: programParam } = useLocalSearchParams<{
     status?: string;
     program?: string;
@@ -50,7 +64,11 @@ export function InstituteApplicantsScreen() {
     }
   }, [programParam]);
 
-  const stats = getInstituteStats(applicants);
+  const programFilters = useMemo(
+    () => buildApplicantProgramFilters(applicants, programs),
+    [applicants, programs]
+  );
+  const stats = getApplicantListStats(applicants);
 
   const applicantsFiltered = useMemo(
     () =>
@@ -58,8 +76,9 @@ export function InstituteApplicantsScreen() {
         status: statusFilter,
         programId: programFilter === 'all' ? undefined : programFilter,
         query: searchQuery,
+        programs,
       }),
-    [applicants, statusFilter, programFilter, searchQuery]
+    [applicants, statusFilter, programFilter, searchQuery, programs]
   );
 
   const visibleApplicants = applicantsFiltered.slice(0, visibleCount);
@@ -67,7 +86,18 @@ export function InstituteApplicantsScreen() {
   return (
     <View style={styles.screen}>
       <InstituteTopBar />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => {
+              void refreshApplicants();
+            }}
+            tintColor={AuthColors.brandPrimary}
+          />
+        }>
         <View style={styles.searchWrap}>
           <Ionicons name="search-outline" size={18} color={AuthColors.textMuted} />
           <TextInput
@@ -86,7 +116,7 @@ export function InstituteApplicantsScreen() {
         <ApplicantProgramChips
           selected={programFilter}
           onSelect={setProgramFilter}
-          programs={APPLICANT_PROGRAM_FILTERS}
+          programs={programFilters}
         />
 
         <ApplicantStatsGrid
@@ -95,27 +125,53 @@ export function InstituteApplicantsScreen() {
           pendingReviews={stats.pendingReviews}
         />
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Applicants</Text>
-          <Text style={styles.sectionCount}>{applicantsFiltered.length} candidates</Text>
-        </View>
+        {isLoading ? (
+          <View style={styles.centeredState}>
+            <ActivityIndicator size="large" color={AuthColors.brandPrimary} />
+            <Text style={styles.stateText}>Memuat daftar pendaftar...</Text>
+          </View>
+        ) : null}
 
-        <View style={styles.list}>
-          {visibleApplicants.map((applicant) => (
-            <ApplicantCard
-              key={applicant.id}
-              applicant={applicant}
-              onPress={() => router.push(`/institute-applicant/${applicant.id}` as Href)}
-            />
-          ))}
-        </View>
+        {!isLoading && error ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable style={styles.retryButton} onPress={() => void refreshApplicants()}>
+              <Text style={styles.retryText}>Coba Lagi</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
-        {visibleCount < applicantsFiltered.length ? (
-          <Pressable
-            style={styles.loadMoreButton}
-            onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}>
-            <Text style={styles.loadMoreText}>Load More Applicants</Text>
-          </Pressable>
+        {!isLoading && !error ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Applicants</Text>
+              <Text style={styles.sectionCount}>{applicantsFiltered.length} candidates</Text>
+            </View>
+
+            <View style={styles.list}>
+              {visibleApplicants.map((applicant) => (
+                <ApplicantCard
+                  key={applicant.id}
+                  applicant={applicant}
+                  onPress={() => router.push(`/institute-applicant/${applicant.id}` as Href)}
+                />
+              ))}
+            </View>
+
+            {applicantsFiltered.length === 0 ? (
+              <View style={styles.centeredState}>
+                <Text style={styles.stateText}>Belum ada pendaftar untuk instansi ini.</Text>
+              </View>
+            ) : null}
+
+            {visibleCount < applicantsFiltered.length ? (
+              <Pressable
+                style={styles.loadMoreButton}
+                onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}>
+                <Text style={styles.loadMoreText}>Load More Applicants</Text>
+              </Pressable>
+            ) : null}
+          </>
         ) : null}
       </ScrollView>
     </View>
@@ -185,5 +241,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: AuthColors.profileBrand,
+  },
+  centeredState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 24,
+  },
+  stateText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: AuthColors.textSecondary,
+    textAlign: 'center',
+  },
+  errorCard: {
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: 'rgba(186, 26, 26, 0.2)',
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 22,
+    color: AuthColors.textPrimary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: AuthColors.brandPrimary,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  retryText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 14,
+    color: AuthColors.white,
   },
 });

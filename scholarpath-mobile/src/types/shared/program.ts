@@ -2,7 +2,7 @@ import { ProgramDocumentRequirement } from '@/src/types/shared/program-registrat
 
 export type ProgramCategory = 'beasiswa' | 'kompetisi';
 
-export type EducationLevel = 'SMP' | 'SMA';
+export type EducationLevel = 'SMP' | 'SMA' | 'SMK';
 
 export type ScholarshipFunding = 'Penuh' | 'Parsial';
 
@@ -30,4 +30,8 @@ export type ExploreProgram = {
   motivationQuestion?: string;
   sortDate: number;
   popularity: number;
+  /** Parsed from imported deskripsi metadata */
+  path?: string;
+  /** Parsed from imported deskripsi metadata */
+  activityType?: string;
 };

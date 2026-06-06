@@ -22,7 +22,9 @@ export function ProgramListCard({ program, onSeeMorePress }: ProgramListCardProp
         <Pressable
           style={styles.bookmarkButton}
           hitSlop={8}
-          onPress={() => toggleWishlist(program.id)}>
+          onPress={() => {
+            void toggleWishlist(program.id);
+          }}>
           <Ionicons
             name={saved ? 'bookmark' : 'bookmark-outline'}
             size={18}

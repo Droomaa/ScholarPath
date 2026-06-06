@@ -5,6 +5,7 @@ import {
   type InstituteApplicant,
   type InstituteApplicantDetail,
 } from '@/src/types/institute/institute';
+import { parseKeahlian } from '@/src/services/profile/map-profile';
 
 const MOCK_PDF_URI = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
 
@@ -118,18 +119,33 @@ export const APPLICANT_DETAIL_BY_ID: Record<string, ApplicantDetailFields> = {
 };
 
 function buildDefaultDetail(applicant: InstituteApplicant): ApplicantDetailFields {
+  const parsed = parseKeahlian(applicant.keahlian ?? '');
   const slug = applicant.name.toLowerCase().replace(/\s+/g, '.');
+  const skills: ApplicantSkill[] = parsed.skills.length
+    ? parsed.skills.map((name) => ({ name, level: 'Advanced' as const }))
+    : [{ name: 'Communication', level: 'Advanced' }];
+
+  const achievements: ApplicantAchievement[] =
+    parsed.interests.length > 0
+      ? parsed.interests.map((interest) => ({
+          title: interest,
+          description: 'Listed in student profile interests.',
+        }))
+      : [
+          {
+            title: 'Academic Excellence Award',
+            description: 'Recognized for consistent high performance in school.',
+          },
+        ];
+
   return {
-    email: `${slug}@student.edu`,
-    motivationAnswer: DEFAULT_MOTIVATION,
+    email: applicant.studentEmail ?? `${slug}@student.edu`,
+    motivationAnswer: applicant.keahlian?.trim()
+      ? `Profil keahlian siswa: ${applicant.keahlian}`
+      : DEFAULT_MOTIVATION,
     trackLabel: `${applicant.major} Track`,
-    skills: [{ name: 'Communication', level: 'Advanced' }],
-    achievements: [
-      {
-        title: 'Academic Excellence Award',
-        description: 'Recognized for consistent high performance in school.',
-      },
-    ],
+    skills,
+    achievements,
     documents: DEFAULT_DOCUMENTS,
   };
 }

@@ -31,6 +31,34 @@ export type LoginResponse = {
   user_id: number;
 };
 
+export type RegisterInstansiRequest = {
+  name: string;
+  email: string;
+  password: string;
+  alamat: string;
+  kontak: string;
+};
+
+export type RegisterInstansiUser = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+};
+
+export type RegisterInstansiResponse = {
+  message: string;
+  data_login: RegisterInstansiUser;
+  data_profil: {
+    id: number;
+    user_id: number | null;
+    nama: string;
+    alamat: string;
+    kontak: string;
+    is_verified: boolean;
+  };
+};
+
 export type StudentRegisterForm = {
   fullName: string;
   email: string;

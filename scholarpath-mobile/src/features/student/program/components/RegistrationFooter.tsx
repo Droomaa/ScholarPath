@@ -7,25 +7,29 @@ type RegistrationFooterProps = {
   onSaveDraftPress: () => void;
   onSubmitPress: () => void;
   submitDisabled?: boolean;
+  isSubmitting?: boolean;
 };
 
 export function RegistrationFooter({
   onSaveDraftPress,
   onSubmitPress,
   submitDisabled = false,
+  isSubmitting = false,
 }: RegistrationFooterProps) {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-      <Pressable style={styles.secondaryButton} onPress={onSaveDraftPress}>
+      <Pressable style={styles.secondaryButton} onPress={onSaveDraftPress} disabled={isSubmitting}>
         <Text style={styles.secondaryButtonText}>Save Draft</Text>
       </Pressable>
       <Pressable
-        style={[styles.primaryButton, submitDisabled && styles.primaryButtonDisabled]}
+        style={[styles.primaryButton, (submitDisabled || isSubmitting) && styles.primaryButtonDisabled]}
         onPress={onSubmitPress}
-        disabled={submitDisabled}>
-        <Text style={styles.primaryButtonText}>Submit Application</Text>
+        disabled={submitDisabled || isSubmitting}>
+        <Text style={styles.primaryButtonText}>
+          {isSubmitting ? 'Submitting...' : 'Submit Application'}
+        </Text>
       </Pressable>
     </View>
   );

@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -16,6 +17,14 @@ import {
   saveAuthSession,
 } from '@/src/services/auth';
 import { ApiError } from '@/src/services/api/client';
+import {
+  buildUpdatePayload,
+  clearJenjangCache,
+  getJenjangList,
+  getProfile,
+  mapUserToSessionUpdates,
+  updateProfile as updateProfileApi,
+} from '@/src/services/profile';
 import {
   defaultStudentSession,
   type AiRecommendation,
@@ -38,12 +47,27 @@ function applyAuthToSession(
     fullName: auth.name,
     email: auth.email,
     isAuthenticated: true,
-    isHydrating: false,
   };
 }
 
 export function StudentSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<StudentSessionState>(defaultStudentSession);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  const syncProfileFromApi = useCallback(async (token: string) => {
+    const jenjangList = await getJenjangList(token);
+    const response = await getProfile(token);
+    const profileUpdates = mapUserToSessionUpdates(response.data, jenjangList);
+
+    setSession((prev) => ({
+      ...prev,
+      ...profileUpdates,
+      userId: response.data.id,
+      isAuthenticated: true,
+      isHydrating: false,
+    }));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,11 +86,15 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
               email: stored.user.email,
             })
           );
-          return;
-        }
 
-        if (stored) {
-          await clearAuthSession();
+          try {
+            await syncProfileFromApi(stored.token);
+          } catch {
+            if (!cancelled) {
+              setSession((prev) => ({ ...prev, isHydrating: false }));
+            }
+          }
+          return;
         }
       } catch {
         // Ignore hydration errors; user can sign in again.
@@ -82,7 +110,7 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [syncProfileFromApi]);
 
   const persistStudentAuth = useCallback(
     async (auth: { token: string; userId: number; name: string; email: string; role: string }) => {
@@ -104,8 +132,14 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
           email: auth.email,
         })
       );
+
+      try {
+        await syncProfileFromApi(auth.token);
+      } catch {
+        setSession((prev) => ({ ...prev, isHydrating: false }));
+      }
     },
-    []
+    [syncProfileFromApi]
   );
 
   const registerStudent = useCallback(
@@ -158,20 +192,81 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
     [persistStudentAuth]
   );
 
+  const completeProfile = useCallback(async (profile: StudentProfileData) => {
+    const token = sessionRef.current.token;
+    if (!token) {
+      throw new ApiError('Sesi tidak valid. Silakan login kembali.', 401);
+    }
+
+    const jenjangList = await getJenjangList(token);
+    await updateProfileApi(
+      token,
+      buildUpdatePayload(
+        {
+          fullName: profile.fullName,
+          educationLevel: profile.educationLevel,
+          major: profile.major,
+          interests: profile.interests,
+          skills: profile.skills,
+        },
+        jenjangList
+      )
+    );
+
+    setSession((prev) => ({
+      ...prev,
+      fullName: profile.fullName,
+      email: profile.email ?? prev.email,
+      educationLevel: profile.educationLevel,
+      major: profile.major ?? '',
+      interests: profile.interests ?? [],
+      skills: profile.skills ?? [],
+    }));
+  }, []);
+
+  const updateProfile = useCallback(
+    async (
+      updates: Partial<
+        Pick<
+          StudentSessionState,
+          | 'bio'
+          | 'profilePhotoUri'
+          | 'fullName'
+          | 'email'
+          | 'educationLevel'
+          | 'major'
+          | 'interests'
+          | 'skills'
+        >
+      >
+    ) => {
+      const current = sessionRef.current;
+      const token = current.token;
+      if (!token) {
+        throw new ApiError('Sesi tidak valid. Silakan login kembali.', 401);
+      }
+
+      const merged = {
+        fullName: updates.fullName ?? current.fullName,
+        educationLevel: updates.educationLevel ?? current.educationLevel,
+        major: updates.major ?? current.major,
+        interests: updates.interests ?? current.interests,
+        skills: updates.skills ?? current.skills,
+      };
+
+      const jenjangList = await getJenjangList(token);
+      await updateProfileApi(token, buildUpdatePayload(merged, jenjangList));
+
+      setSession((prev) => ({ ...prev, ...updates }));
+    },
+    []
+  );
+
   const value = useMemo<StudentSessionContextValue>(
     () => ({
       ...session,
       setFullName: (fullName) => setSession((prev) => ({ ...prev, fullName })),
-      completeProfile: (profile: StudentProfileData) =>
-        setSession((prev) => ({
-          ...prev,
-          fullName: profile.fullName,
-          email: profile.email ?? prev.email,
-          educationLevel: profile.educationLevel,
-          major: profile.major ?? '',
-          interests: profile.interests ?? [],
-          skills: profile.skills ?? [],
-        })),
+      completeProfile,
       signInAsStudent: ({ fullName, email } = {}) => {
         const derivedName =
           fullName?.trim() ||
@@ -186,9 +281,10 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
       },
       registerStudent,
       loginStudent,
-      updateProfile: (updates) => setSession((prev) => ({ ...prev, ...updates })),
+      updateProfile,
       signOut: () => {
         void clearAuthSession();
+        clearJenjangCache();
         setSession({ ...defaultStudentSession, isHydrating: false });
       },
       setAiRecommendationHistory: (recommendation: AiRecommendation) =>
@@ -210,7 +306,7 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
           aiWizardSkills: skills,
         })),
     }),
-    [session, registerStudent, loginStudent]
+    [session, registerStudent, loginStudent, completeProfile, updateProfile]
   );
 
   return (

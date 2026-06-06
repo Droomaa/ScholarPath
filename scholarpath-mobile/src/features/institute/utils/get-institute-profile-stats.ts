@@ -1,5 +1,4 @@
-import { INSTITUTE_PROGRAMS } from '@/src/features/institute/constants/institute-programs';
-import { getInstituteStats } from '@/src/features/institute/constants/institute-applicants';
+import type { InstituteApplicant, InstituteProgram } from '@/src/types/institute/institute';
 
 export type InstituteProfileStats = {
   activePrograms: number;
@@ -7,12 +6,13 @@ export type InstituteProfileStats = {
   totalApplicants: number;
 };
 
-export function getInstituteProfileStats(): InstituteProfileStats {
-  const stats = getInstituteStats();
-
+export function getInstituteProfileStats(
+  programs: InstituteProgram[],
+  applicants: InstituteApplicant[]
+): InstituteProfileStats {
   return {
-    activePrograms: INSTITUTE_PROGRAMS.filter((program) => program.status === 'active').length,
-    publishedPrograms: INSTITUTE_PROGRAMS.length,
-    totalApplicants: stats.totalApplicants,
+    activePrograms: programs.filter((program) => program.status === 'active').length,
+    publishedPrograms: programs.length,
+    totalApplicants: applicants.length,
   };
 }

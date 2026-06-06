@@ -1,4 +1,4 @@
-import { EXPLORE_PROGRAMS } from '@/src/features/student/explore/constants/explore-programs';
+import { getExplorePrograms } from '@/src/features/student/explore/constants/explore-programs';
 import { formatRupiah } from '@/src/features/student/program/utils/format-prize';
 import {
   INTEREST_FIELD_OPTIONS,
@@ -37,7 +37,7 @@ function countKeywordMatches(text: string, keywords: string[]) {
   return keywords.filter((keyword) => normalized.includes(keyword)).length;
 }
 
-function buildInsight(formData: AiWizardFormData, program: ExploreProgram) {
+export function buildInsight(formData: AiWizardFormData, program: ExploreProgram) {
   const interestLabels = formData.interestFields
     .map((id) => INTEREST_FIELD_OPTIONS.find((item) => item.id === id)?.label)
     .filter(Boolean)
@@ -84,7 +84,7 @@ function scoreProgram(
     score += 8;
   }
 
-  const corpus = `${program.title} ${program.description} ${program.longDescription ?? ''}`.toLowerCase();
+  const corpus = `${program.title} ${program.description} ${program.longDescription ?? ''} ${program.path ?? ''} ${program.activityType ?? ''}`.toLowerCase();
 
   for (const interestId of formData.interestFields) {
     const keywords = INTEREST_KEYWORDS[interestId] ?? [];
@@ -140,7 +140,7 @@ export function matchProgramsForUser(
   formData: AiWizardFormData,
   educationLevel: EducationLevel | ''
 ): AiProgramMatch[] {
-  const filteredPrograms = EXPLORE_PROGRAMS.filter((program) => {
+  const filteredPrograms = getExplorePrograms().filter((program) => {
     if (formData.opportunityTypes.length === 0) return true;
     return formData.opportunityTypes.includes(program.category);
   });

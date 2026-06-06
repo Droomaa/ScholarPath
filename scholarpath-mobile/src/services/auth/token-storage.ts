@@ -8,6 +8,7 @@ export type StoredAuthUser = {
   name: string;
   email: string;
   role: string;
+  instansiId?: number;
 };
 
 export type StoredAuthSession = {

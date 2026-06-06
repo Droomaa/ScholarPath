@@ -72,8 +72,26 @@ const CLOSED_DOCUMENTS: InstituteProgramDocument[] = [
   },
 ];
 
+/** Analytics-only mock metadata; real program screens use API data. */
+function analyticsMockProgram(
+  program: Omit<
+    InstituteProgram,
+    'legacyProgramId' | 'sourceKind' | 'sourceNumericId' | 'verifiedBy' | 'createdAt' | 'updatedAt'
+  > & { id: string }
+): InstituteProgram {
+  return {
+    ...program,
+    legacyProgramId: program.id,
+    sourceKind: 'beasiswa',
+    sourceNumericId: program.id.length * 100,
+    verifiedBy: program.status === 'review' ? null : 1,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2025-06-01T00:00:00.000Z',
+  };
+}
+
 export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
-  {
+  analyticsMockProgram({
     id: 'prog-global-leaders-2024',
     title: 'Global Leaders Grant 2024',
     categoryTag: 'ACADEMIC EXCELLENCE',
@@ -90,8 +108,8 @@ export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
     status: 'active',
     heroGradient: ['#4648D4', '#6063EE', '#2F2EBE'],
     requiredDocuments: DEFAULT_DOCUMENTS,
-  },
-  {
+  }),
+  analyticsMockProgram({
     id: 'prog-stem-fellowship',
     title: 'STEM Research Fellowship',
     categoryTag: 'POST-GRADUATE',
@@ -108,8 +126,8 @@ export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
     status: 'active',
     heroGradient: ['#2F2EBE', '#4648D4', '#131B2E'],
     requiredDocuments: STEM_DOCUMENTS,
-  },
-  {
+  }),
+  analyticsMockProgram({
     id: 'prog-tech-innovators',
     title: 'Tech Innovators Grant',
     categoryTag: 'STEM',
@@ -126,8 +144,8 @@ export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
     status: 'active',
     heroGradient: ['#6063EE', '#4648D4', '#9C48EA'],
     requiredDocuments: STEM_DOCUMENTS,
-  },
-  {
+  }),
+  analyticsMockProgram({
     id: 'prog-leadership-award',
     title: 'Global Leadership Award',
     categoryTag: 'LEADERSHIP',
@@ -144,8 +162,8 @@ export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
     status: 'review',
     heroGradient: ['#4648D4', '#2C2ABC', '#131B2E'],
     requiredDocuments: DEFAULT_DOCUMENTS,
-  },
-  {
+  }),
+  analyticsMockProgram({
     id: 'prog-women-stem',
     title: 'Women in STEM 2024',
     categoryTag: 'STEM',
@@ -162,8 +180,8 @@ export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
     status: 'review',
     heroGradient: ['#9C48EA', '#6063EE', '#4648D4'],
     requiredDocuments: STEM_DOCUMENTS,
-  },
-  {
+  }),
+  analyticsMockProgram({
     id: 'prog-community-reach',
     title: 'Community Reach Grant',
     categoryTag: 'SOCIAL IMPACT',
@@ -180,8 +198,8 @@ export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
     status: 'closed',
     heroGradient: ['#565E74', '#464554', '#131B2E'],
     requiredDocuments: CLOSED_DOCUMENTS,
-  },
-  {
+  }),
+  analyticsMockProgram({
     id: 'prog-digital-leadership',
     title: 'Digital Leadership Program',
     categoryTag: 'TECHNOLOGY',
@@ -198,7 +216,7 @@ export const INSTITUTE_PROGRAMS: InstituteProgram[] = [
     status: 'closed',
     heroGradient: ['#464554', '#2F2EBE', '#131B2E'],
     requiredDocuments: CLOSED_DOCUMENTS,
-  },
+  }),
 ];
 
 export function getInstituteProgramById(id: string) {

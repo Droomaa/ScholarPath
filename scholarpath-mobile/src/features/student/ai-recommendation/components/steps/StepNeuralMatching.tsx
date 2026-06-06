@@ -1,13 +1,16 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AiWizardHeader } from '@/src/features/student/ai-recommendation/components/AiWizardHeader';
 import { AuthColors, FontFamily } from '@/src/theme';
 
 type StepNeuralMatchingProps = {
-  onComplete: () => void;
+  onRunMatching: () => Promise<void>;
+  error: string | null;
+  isLoading: boolean;
+  onRetry: () => void;
 };
 
 type ProcessingStep = {
@@ -23,11 +26,26 @@ const INITIAL_STEPS: ProcessingStep[] = [
   { id: 'similarity', label: 'Calculating Similarity Score', status: 'pending', progress: 0 },
 ];
 
-export function StepNeuralMatching({ onComplete }: StepNeuralMatchingProps) {
+export function StepNeuralMatching({
+  onRunMatching,
+  error,
+  isLoading,
+  onRetry,
+}: StepNeuralMatchingProps) {
+  const [hasStarted, setHasStarted] = useState(false);
   const [steps, setSteps] = useState<ProcessingStep[]>(INITIAL_STEPS);
   const [overallProgress, setOverallProgress] = useState(0);
   const pulse = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (hasStarted) {
+      return;
+    }
+
+    setHasStarted(true);
+    void onRunMatching();
+  }, [hasStarted, onRunMatching]);
 
   useEffect(() => {
     const pulseLoop = Animated.loop(
@@ -48,6 +66,10 @@ export function StepNeuralMatching({ onComplete }: StepNeuralMatchingProps) {
   }, [pulse, rotate]);
 
   useEffect(() => {
+    if (error) {
+      return;
+    }
+
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     timers.push(
@@ -66,26 +88,37 @@ export function StepNeuralMatching({ onComplete }: StepNeuralMatchingProps) {
         setSteps([
           { id: 'interests', label: 'Matching Interests', status: 'completed', progress: 100 },
           { id: 'skills', label: 'Analyzing Skills', status: 'completed', progress: 100 },
-          { id: 'similarity', label: 'Calculating Similarity Score', status: 'active', progress: 68 },
+          {
+            id: 'similarity',
+            label: 'Calculating Similarity Score',
+            status: 'active',
+            progress: isLoading ? 68 : 100,
+          },
         ]);
-        setOverallProgress(83);
+        setOverallProgress(isLoading ? 83 : 100);
       }, 2200)
     );
 
-    timers.push(
-      setTimeout(() => {
-        setSteps([
-          { id: 'interests', label: 'Matching Interests', status: 'completed', progress: 100 },
-          { id: 'skills', label: 'Analyzing Skills', status: 'completed', progress: 100 },
-          { id: 'similarity', label: 'Calculating Similarity Score', status: 'completed', progress: 100 },
-        ]);
-        setOverallProgress(100);
-        onComplete();
-      }, 3800)
-    );
+    if (!isLoading) {
+      timers.push(
+        setTimeout(() => {
+          setSteps([
+            { id: 'interests', label: 'Matching Interests', status: 'completed', progress: 100 },
+            { id: 'skills', label: 'Analyzing Skills', status: 'completed', progress: 100 },
+            {
+              id: 'similarity',
+              label: 'Calculating Similarity Score',
+              status: 'completed',
+              progress: 100,
+            },
+          ]);
+          setOverallProgress(100);
+        }, 2800)
+      );
+    }
 
     return () => timers.forEach(clearTimeout);
-  }, [onComplete]);
+  }, [error, isLoading]);
 
   const spin = rotate.interpolate({
     inputRange: [0, 1],
@@ -209,6 +242,18 @@ export function StepNeuralMatching({ onComplete }: StepNeuralMatchingProps) {
             />
           </View>
         </View>
+
+        {error ? (
+          <View style={styles.errorCard}>
+            <Ionicons name="alert-circle-outline" size={22} color="#BA1A1A" />
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable style={styles.retryButton} onPress={onRetry} disabled={isLoading}>
+              <Text style={styles.retryButtonText}>
+                {isLoading ? 'Memproses...' : 'Coba Lagi'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -447,4 +492,31 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   overallFill: { height: '100%', borderRadius: 9999 },
+  errorCard: {
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: 'rgba(186, 26, 26, 0.2)',
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 22,
+    color: AuthColors.textPrimary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: AuthColors.brandPrimary,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  retryButtonText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 14,
+    color: AuthColors.white,
+  },
 });

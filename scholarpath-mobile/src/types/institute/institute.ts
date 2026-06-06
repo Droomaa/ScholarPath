@@ -17,11 +17,15 @@ export type InstituteProgramDocument = {
 
 export type InstituteProgram = {
   id: string;
+  legacyProgramId: string;
+  sourceKind: 'beasiswa' | 'olimpiade';
+  sourceNumericId: number;
   title: string;
   categoryTag: string;
   categoryBadgeLabel: string;
   categoryTagBg: string;
   categoryTagColor: string;
+  description?: string;
   applicantCount: number;
   pendingCount: number;
   acceptedCount: number;
@@ -32,6 +36,9 @@ export type InstituteProgram = {
   status: InstituteProgramTab;
   heroGradient: [string, string, string];
   requiredDocuments: InstituteProgramDocument[];
+  verifiedBy: number | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ApplicantStatus = 'pending' | 'accepted' | 'rejected';
@@ -61,14 +68,20 @@ export type ApplicantUploadedDocument = {
 
 export type InstituteApplicant = {
   id: string;
+  pendaftaranId: number;
   name: string;
   major: string;
   programId: string;
   programTitle: string;
+  programType?: string;
   status: ApplicantStatus;
+  statusId?: number | null;
   avatarUri?: string;
   isOnline?: boolean;
   studentRegistrationId?: string;
+  studentEmail?: string;
+  keahlian?: string;
+  submittedAt?: string;
 };
 
 export type InstituteApplicantDetail = InstituteApplicant & {
@@ -83,6 +96,9 @@ export type InstituteApplicantDetail = InstituteApplicant & {
 };
 
 export type InstituteSessionState = {
+  token: string;
+  userId: number;
+  instansiId: number;
   instituteName: string;
   email: string;
   contactNumber: string;
@@ -90,22 +106,27 @@ export type InstituteSessionState = {
   about: string;
   logoUri: string;
   memberSince: string;
+  isAuthenticated: boolean;
+  isHydrating: boolean;
 };
 
 export type InstituteSessionContextValue = InstituteSessionState & {
-  signInAsInstitute: (options: {
-    instituteName?: string;
-    email?: string;
-    contactNumber?: string;
-    address?: string;
-    about?: string;
-    isNewAccount?: boolean;
-  }) => void;
-  updateInstituteProfile: (updates: Partial<Omit<InstituteSessionState, never>>) => void;
+  registerInstitute: (input: {
+    instituteName: string;
+    contactNumber: string;
+    address: string;
+    email: string;
+    password: string;
+  }) => Promise<void>;
+  loginInstitute: (input: { email: string; password: string }) => Promise<void>;
+  updateInstituteProfile: (updates: Partial<Omit<InstituteSessionState, 'token' | 'userId' | 'instansiId' | 'isAuthenticated' | 'isHydrating'>>) => void;
   signOut: () => void;
 };
 
 export const defaultInstituteSession: InstituteSessionState = {
+  token: '',
+  userId: 0,
+  instansiId: 0,
   instituteName: '',
   email: '',
   contactNumber: '',
@@ -113,4 +134,6 @@ export const defaultInstituteSession: InstituteSessionState = {
   about: '',
   logoUri: '',
   memberSince: '',
+  isAuthenticated: false,
+  isHydrating: true,
 };

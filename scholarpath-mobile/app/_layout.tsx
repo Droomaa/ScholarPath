@@ -15,11 +15,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { ApplicationProvider } from '@/src/context/shared/ApplicationContext';
+import { ApplicationProviderHost } from '@/src/context/shared/ApplicationProviderHost';
 import { InstituteApplicantsProvider } from '@/src/context/institute/InstituteApplicantsContext';
 import { InstituteNotificationProvider } from '@/src/context/institute/InstituteNotificationContext';
+import { InstituteProgramsProvider } from '@/src/context/institute/InstituteProgramsContext';
 import { InstituteSessionProvider } from '@/src/context/institute/InstituteSessionContext';
 import { InstituteTeamProvider } from '@/src/context/institute/InstituteTeamContext';
+import { ExploreProgramsProvider } from '@/src/context/student/ExploreProgramsContext';
 import { NotificationProvider } from '@/src/context/student/NotificationContext';
 import { StudentSessionProvider } from '@/src/context/student/StudentSessionContext';
 import { WishlistProvider } from '@/src/context/student/WishlistContext';
@@ -49,11 +51,13 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StudentSessionProvider>
+        <ExploreProgramsProvider>
         <InstituteSessionProvider>
+          <InstituteApplicantsProvider>
+          <InstituteProgramsProvider>
           <InstituteNotificationProvider>
           <InstituteTeamProvider>
-          <InstituteApplicantsProvider>
-          <ApplicationProvider>
+          <ApplicationProviderHost>
             <WishlistProvider>
               <NotificationProvider>
                 <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -82,11 +86,13 @@ export default function RootLayout() {
                 </ThemeProvider>
               </NotificationProvider>
             </WishlistProvider>
-          </ApplicationProvider>
-          </InstituteApplicantsProvider>
+          </ApplicationProviderHost>
           </InstituteTeamProvider>
           </InstituteNotificationProvider>
+          </InstituteProgramsProvider>
+          </InstituteApplicantsProvider>
         </InstituteSessionProvider>
+        </ExploreProgramsProvider>
       </StudentSessionProvider>
     </SafeAreaProvider>
   );

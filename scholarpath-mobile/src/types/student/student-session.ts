@@ -41,7 +41,7 @@ export type StudentSessionState = {
 
 export type StudentSessionContextValue = StudentSessionState & {
   setFullName: (fullName: string) => void;
-  completeProfile: (profile: StudentProfileData) => void;
+  completeProfile: (profile: StudentProfileData) => Promise<void>;
   signInAsStudent: (options?: { fullName?: string; email?: string }) => void;
   registerStudent: (input: { fullName: string; email: string; password: string }) => Promise<void>;
   loginStudent: (input: { email: string; password: string }) => Promise<void>;
@@ -59,7 +59,7 @@ export type StudentSessionContextValue = StudentSessionState & {
         | 'skills'
       >
     >
-  ) => void;
+  ) => Promise<void>;
   signOut: () => void;
   setAiRecommendationHistory: (recommendation: AiRecommendation) => void;
   setAiRecommendationResults: (results: AiProgramMatch[]) => void;

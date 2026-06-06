@@ -29,16 +29,24 @@ export function getProgramRewardInfo(program: {
   prizeAmountIdr?: number;
 }) {
   if (program.category === 'kompetisi') {
+    if (program.prizeAmountIdr == null || program.prizeAmountIdr <= 0) {
+      return null;
+    }
+
     return {
       label: 'PRIZE',
-      value: program.prizeAmountIdr != null ? formatRupiah(program.prizeAmountIdr) : '-',
+      value: formatRupiah(program.prizeAmountIdr),
       icon: 'trophy-outline' as const,
     };
   }
 
+  if (!program.funding) {
+    return null;
+  }
+
   return {
     label: 'DANA',
-    value: program.funding ?? '-',
+    value: program.funding,
     icon: 'wallet-outline' as const,
   };
 }

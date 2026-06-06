@@ -4,26 +4,27 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useExplorePrograms } from '@/src/context/student/ExploreProgramsContext';
 import { useWishlist } from '@/src/context/student/WishlistContext';
 import { ExploreCategory } from '@/src/features/student/explore/components/CategoryChips';
-import { EXPLORE_PROGRAMS } from '@/src/features/student/explore/constants/explore-programs';
 import { WishlistFilterChips, WishlistProgramCard } from '@/src/features/student/wishlist/components';
 import { AuthColors, AuthTypography, FontFamily } from '@/src/theme';
 
 export function WishlistScreen() {
   const insets = useSafeAreaInsets();
   const { wishlistIds } = useWishlist();
+  const { programs } = useExplorePrograms();
   const [category, setCategory] = useState<ExploreCategory>('semua');
 
   const savedPrograms = useMemo(() => {
-    const programs = EXPLORE_PROGRAMS.filter((program) => wishlistIds.includes(program.id));
+    const saved = programs.filter((program) => wishlistIds.includes(program.id));
 
     if (category === 'semua') {
-      return programs;
+      return saved;
     }
 
-    return programs.filter((program) => program.category === category);
-  }, [category, wishlistIds]);
+    return saved.filter((program) => program.category === category);
+  }, [category, programs, wishlistIds]);
 
   return (
     <View style={styles.screen}>

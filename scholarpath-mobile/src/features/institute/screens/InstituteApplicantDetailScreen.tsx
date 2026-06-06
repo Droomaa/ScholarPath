@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useApplications } from '@/src/context/shared/ApplicationContext';
 import { useInstituteApplicants } from '@/src/context/institute/InstituteApplicantsContext';
 import {
   ApplicantAchievementsCard,
@@ -15,6 +14,7 @@ import {
   ApplicantMotivationCard,
   ApplicantSkillsCard,
 } from '@/src/features/institute/components';
+import { ApiError } from '@/src/services/api/client';
 import { type ApplicantUploadedDocument } from '@/src/types/institute/institute';
 import { AuthColors, FontFamily } from '@/src/theme';
 
@@ -27,8 +27,7 @@ export function InstituteApplicantDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const { getApplicantDetailById, updateApplicantStatus } = useInstituteApplicants();
-  const { updateRegistrationStatus } = useApplications();
+  const { getApplicantDetailById, updateApplicantStatus, isUpdatingStatus } = useInstituteApplicants();
   const applicant = id ? getApplicantDetailById(id) : undefined;
   const [decision, setDecision] = useState<DecisionState | null>(null);
 
@@ -68,26 +67,28 @@ export function InstituteApplicantDetailScreen() {
 
   const closeDecision = () => setDecision(null);
 
-  const applyDecision = (action: 'accept' | 'reject') => {
-    updateApplicantStatus(applicant.id, action === 'accept' ? 'accepted' : 'rejected');
+  const applyDecision = async (action: 'accept' | 'reject') => {
+    try {
+      await updateApplicantStatus(
+        applicant.id,
+        action === 'accept' ? 'accepted' : 'rejected'
+      );
 
-    if (applicant.studentRegistrationId) {
-      if (action === 'accept') {
-        updateRegistrationStatus(applicant.studentRegistrationId, 'accepted', {
-          acceptedMessage: {
-            title: 'Congratulations! You have been accepted',
-            subtitle: `Your application for ${applicant.programTitle} has been accepted by the institute.`,
-          },
-        });
-      } else {
-        updateRegistrationStatus(applicant.studentRegistrationId, 'rejected', {
-          rejectedFeedback: `Thank you for applying to ${applicant.programTitle}. After careful review, we are unable to offer a place at this time. We encourage you to apply again in future intakes.`,
-        });
-      }
+      Alert.alert(
+        'Berhasil',
+        action === 'accept'
+          ? `${applicant.name} telah diterima.`
+          : `${applicant.name} telah ditolak.`
+      );
+      closeDecision();
+      router.back();
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Gagal memperbarui status pendaftar.';
+      Alert.alert('Gagal', message);
     }
-
-    closeDecision();
-    router.back();
   };
 
   const handleAccept = () => setDecision({ action: 'accept', step: 1 });
@@ -175,8 +176,8 @@ export function InstituteApplicantDetailScreen() {
           setDecision((current) => (current ? { ...current, step: 2 } : current))
         }
         onConfirm={() => {
-          if (decision) {
-            applyDecision(decision.action);
+          if (decision && !isUpdatingStatus) {
+            void applyDecision(decision.action);
           }
         }}
       />

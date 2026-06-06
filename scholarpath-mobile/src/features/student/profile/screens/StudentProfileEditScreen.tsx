@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   Pressable,
+  Alert,
   StyleSheet,
   Text,
   View,
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { KeyboardAwareScrollView } from '@/src/components/KeyboardAwareScrollView';
 import { useStudentSession } from '@/src/context/student/StudentSessionContext';
+import { ApiError } from '@/src/services/api/client';
 import {
   OptionPickerModal,
   ProfileChipPicker,
@@ -22,8 +24,9 @@ import {
 } from '@/src/features/student/profile/components';
 import {
   EDUCATION_LEVELS,
+  getMajorOptions,
   INTERESTS_BY_CATEGORY,
-  MAJORS,
+  requiresMajor,
   SKILLS_BY_CATEGORY,
 } from '@/src/features/student/profile/constants/profile-options';
 import { useProfilePhotoPicker } from '@/src/features/student/profile/hooks/useProfilePhotoPicker';
@@ -40,7 +43,6 @@ export function StudentProfileEditScreen() {
   const { updateProfile } = session;
 
   const [fullName, setFullName] = useState(session.fullName);
-  const [email, setEmail] = useState(session.email);
   const [bio, setBio] = useState(session.bio);
   const [educationLevel, setEducationLevel] = useState(session.educationLevel);
   const [major, setMajor] = useState(session.major);
@@ -49,36 +51,46 @@ export function StudentProfileEditScreen() {
 
   const [educationPickerVisible, setEducationPickerVisible] = useState(false);
   const [majorPickerVisible, setMajorPickerVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const showMajorField = educationLevel === 'SMA';
+  const showMajorField = requiresMajor(educationLevel);
+  const majorOptions = getMajorOptions(educationLevel);
 
   const canSave =
     fullName.trim().length > 0 &&
     !!educationLevel &&
-    (educationLevel === 'SMP' || !!major) &&
+    (!requiresMajor(educationLevel) || !!major) &&
     interests.length >= 3 &&
     skills.length >= 1;
 
   const handleEducationSelect = (level: string) => {
-    setEducationLevel(level as 'SMP' | 'SMA' | '');
-    if (level === 'SMP') {
-      setMajor('');
-    }
+    setEducationLevel(level as 'SMP' | 'SMA' | 'SMK' | '');
+    setMajor('');
   };
 
-  const handleSave = () => {
-    if (!canSave) return;
+  const handleSave = async () => {
+    if (!canSave || isSubmitting) return;
 
-    updateProfile({
-      fullName: fullName.trim(),
-      email: email.trim(),
-      bio: bio.trim(),
-      educationLevel,
-      major: educationLevel === 'SMA' ? major : '',
-      interests,
-      skills,
-    });
-    router.back();
+    setIsSubmitting(true);
+    try {
+      await updateProfile({
+        fullName: fullName.trim(),
+        bio: bio.trim(),
+        educationLevel,
+        major: requiresMajor(educationLevel) ? major : '',
+        interests,
+        skills,
+      });
+      router.back();
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Gagal menyimpan profil. Periksa koneksi internet Anda.';
+      Alert.alert('Simpan Profil Gagal', message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -134,10 +146,11 @@ export function StudentProfileEditScreen() {
             <ProfileTextField
               label="Email"
               placeholder="email@example.com"
-              value={email}
-              onChangeText={setEmail}
+              value={session.email}
+              editable={false}
               keyboardType="email-address"
               autoCapitalize="none"
+              style={styles.readOnlyInput}
             />
 
             <ProfileTextField
@@ -159,8 +172,8 @@ export function StudentProfileEditScreen() {
 
             {showMajorField ? (
               <ProfileSelectField
-                label="Jurusan"
-                placeholder="Pilih Jurusan"
+                label="Jurusan / Program Studi"
+                placeholder="Pilih Jurusan / Program Studi"
                 value={major}
                 onPress={() => setMajorPickerVisible(true)}
               />
@@ -182,7 +195,11 @@ export function StudentProfileEditScreen() {
           </View>
       </KeyboardAwareScrollView>
 
-      <ProfileSaveButton onPress={handleSave} disabled={!canSave} label="Simpan Perubahan" />
+      <ProfileSaveButton
+        onPress={handleSave}
+        disabled={!canSave || isSubmitting}
+        label="Simpan Perubahan"
+      />
 
       <OptionPickerModal
         visible={educationPickerVisible}
@@ -195,8 +212,8 @@ export function StudentProfileEditScreen() {
 
       <OptionPickerModal
         visible={majorPickerVisible}
-        title="Pilih Jurusan"
-        options={MAJORS}
+        title="Pilih Jurusan / Program Studi"
+        options={majorOptions}
         selectedValue={major}
         onClose={() => setMajorPickerVisible(false)}
         onSelect={setMajor}
@@ -296,5 +313,9 @@ const styles = StyleSheet.create({
     minHeight: 88,
     textAlignVertical: 'top',
     paddingTop: 13,
+  },
+  readOnlyInput: {
+    backgroundColor: AuthColors.profileChipBackground,
+    color: AuthColors.textSecondary,
   },
 });

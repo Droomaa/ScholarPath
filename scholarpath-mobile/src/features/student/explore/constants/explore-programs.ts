@@ -1,7 +1,8 @@
 import { ExploreProgram } from '@/src/types/shared/program';
 import { convertToIdr } from '@/src/features/student/program/utils/format-prize';
+import { sanitizeExploreProgram } from '@/src/services/explore/sanitize-explore-program';
 
-export const EXPLORE_PROGRAMS: ExploreProgram[] = [
+export const MOCK_EXPLORE_PROGRAMS: ExploreProgram[] = [
   {
     id: 'beasiswa-jaya-2026',
     title: 'Beasiswa Jaya 2026',
@@ -144,8 +145,37 @@ export const EXPLORE_PROGRAMS: ExploreProgram[] = [
   },
 ];
 
+let exploreProgramCache: ExploreProgram[] = MOCK_EXPLORE_PROGRAMS;
+
+export function getExplorePrograms(): ExploreProgram[] {
+  return exploreProgramCache;
+}
+
+export function setExploreProgramCache(programs: ExploreProgram[]) {
+  exploreProgramCache = programs.map(sanitizeExploreProgram);
+}
+
+export function upsertProgramInCache(program: ExploreProgram) {
+  const sanitized = sanitizeExploreProgram(program);
+  const index = exploreProgramCache.findIndex((item) => item.id === sanitized.id);
+  if (index >= 0) {
+    exploreProgramCache = exploreProgramCache.map((item) =>
+      item.id === sanitized.id ? sanitized : item
+    );
+    return;
+  }
+  exploreProgramCache = [...exploreProgramCache, sanitized];
+}
+
+export function resetExploreProgramCache() {
+  exploreProgramCache = MOCK_EXPLORE_PROGRAMS;
+}
+
+/** @deprecated Use getExplorePrograms() — kept for existing imports during migration */
+export const EXPLORE_PROGRAMS = MOCK_EXPLORE_PROGRAMS;
+
 export function getProgramById(id: string) {
-  return EXPLORE_PROGRAMS.find((program) => program.id === id);
+  return exploreProgramCache.find((program) => program.id === id);
 }
 
 export function getJenjangOptions(userEducationLevel: string) {
@@ -156,5 +186,6 @@ export function getJenjangOptions(userEducationLevel: string) {
 }
 
 export function getProgramShareMessage(program: ExploreProgram) {
-  return `Cek program ${program.title} di ScholarPath!\n\n${program.longDescription ?? program.description}`;
+  const body = program.longDescription ?? program.description;
+  return `Cek program ${program.title} di ScholarPath!\n\n${body}`;
 }

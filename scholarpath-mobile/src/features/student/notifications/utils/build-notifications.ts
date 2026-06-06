@@ -1,4 +1,7 @@
-import { EXPLORE_PROGRAMS, getProgramById } from '@/src/features/student/explore/constants/explore-programs';
+import {
+  getExplorePrograms,
+  getProgramById,
+} from '@/src/features/student/explore/constants/explore-programs';
 import { getDeadlineCountdown } from '@/src/features/student/program/utils/deadline-countdown';
 import { type ActiveProgram, type RegistrationApplication } from '@/src/types/shared/application';
 import {
@@ -201,10 +204,11 @@ function buildProgramNotifications(
   }
 
   const educationLevel = session.educationLevel;
+  const allPrograms = getExplorePrograms();
   const matchingPrograms =
     educationLevel === ''
-      ? EXPLORE_PROGRAMS
-      : EXPLORE_PROGRAMS.filter((program) =>
+      ? allPrograms
+      : allPrograms.filter((program) =>
           program.educationLevels.includes(educationLevel)
         );
 
