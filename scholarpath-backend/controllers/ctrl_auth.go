@@ -48,7 +48,7 @@ func RegisterSiswa(c *gin.Context) {
 	user := models.User{Name: input.Name, Email: input.Email, Password: hashedPassword, Role: "student"}
 
 	if err := koneksi.DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email sudah digunakan"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email sudah digunakan (Detail: " + err.Error() + ")"})
 		return
 	}
 
@@ -70,14 +70,14 @@ func RegisterInstansi(c *gin.Context) {
 
 	if err := tx.Create(&user).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email sudah digunakan"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Email sudah digunakan (Detail: " + err.Error() + ")"})
 		return
 	}
 
 	instansi := models.Instansi{UserID: &user.ID, Nama: input.Name, Alamat: input.Alamat, Kontak: input.Kontak}
 	if err := tx.Create(&instansi).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan profil instansi"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan profil instansi (Detail: " + err.Error() + ")"})
 		return
 	}
 

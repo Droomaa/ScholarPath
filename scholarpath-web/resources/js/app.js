@@ -1,12 +1,28 @@
 import '../css/app.css';
 import './bootstrap';
 
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+// Listen to all navigations to keep localStorage in sync with Laravel session status
+router.on('navigate', (event) => {
+    const auth = event.detail.page.props.auth;
+    if (auth && auth.user && auth.go_token) {
+        localStorage.setItem('auth_token', auth.go_token);
+        localStorage.setItem('auth_role', auth.user.role);
+        localStorage.setItem('auth_name', auth.user.name);
+        localStorage.setItem('auth_user_id', auth.user.id);
+    } else {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_role');
+        localStorage.removeItem('auth_name');
+        localStorage.removeItem('auth_user_id');
+    }
+});
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -16,6 +32,15 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
+        // Synchronize on initial boot
+        const auth = props.initialPage.props.auth;
+        if (auth && auth.user && auth.go_token) {
+            localStorage.setItem('auth_token', auth.go_token);
+            localStorage.setItem('auth_role', auth.user.role);
+            localStorage.setItem('auth_name', auth.user.name);
+            localStorage.setItem('auth_user_id', auth.user.id);
+        }
+
         return createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(ZiggyVue)

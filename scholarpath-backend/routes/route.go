@@ -95,6 +95,9 @@ func SetupRouter() *gin.Engine {
 		protected.PUT("/admin/verify/olimpiade/:id", controllers.VerifyOlimpiade)
 		protected.PUT("/admin/verify/beasiswa/:id", controllers.VerifyBeasiswa)
 		protected.POST("/admin/notifications", controllers.CreateNotification)
+		protected.GET("/admin/users", controllers.GetAdminUsers)
+		protected.GET("/admin/stats", controllers.GetAdminStats)
+		protected.GET("/admin/verification-queue", controllers.GetVerificationQueue)
 
 		// --- RUTE NOTIFIKASI UMUM (Semua User) ---
 		protected.GET("/user/notifications", controllers.GetMyNotifications)
