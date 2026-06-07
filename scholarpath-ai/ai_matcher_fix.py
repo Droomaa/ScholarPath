@@ -10,11 +10,14 @@ class ScholarPathMatcher:
     def __init__(self, dataset_path, gemini_api_key):
         self.df = pd.read_csv(dataset_path)
         
+        # --- PERBAIKAN: Mengatasi NaN/Kosong agar tidak error saat digabung ---
+        self.df.fillna("", inplace=True)
+        
+        # --- PERBAIKAN: Merakit teks hanya dari kolom yang dicetak Golang ---
         self.df['search_content'] = (
             self.df['title'].astype(str) + " " + 
-            self.df['scholarship_path'].astype(str) + " " +
-            self.df['activity_type'].astype(str) + " " +
-            self.df['description'].astype(str)
+            self.df['description'].astype(str) + " " +
+            self.df['level'].astype(str)
         ).str.lower()
 
         self.semantic_model = SentenceTransformer('paraphrase-multilingual-mpnet-base-v2')

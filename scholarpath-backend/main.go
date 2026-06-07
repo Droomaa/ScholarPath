@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"scholarpath-backend/controllers"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/routes"
 
@@ -15,6 +16,7 @@ func main() {
 	}
 
 	koneksi.KoneksiDatabase()
+	controllers.SyncDatabaseToCSV()
 	r := routes.SetupRouter()
 	r.Run(":8080")
 }
