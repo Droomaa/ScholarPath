@@ -1,6 +1,9 @@
 package controllers
 
 import (
+	"crypto/rand"
+	"encoding/json"
+	"math/big"
 	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
@@ -140,6 +143,128 @@ func LoginUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login berhasil",
+		"token":   token,
+		"role":    user.Role,
+		"name":    user.Name,
+		"user_id": user.ID,
+	})
+}
+
+// --- GOOGLE SIGN-IN ---
+type LoginGoogleInput struct {
+	AccessToken string `json:"access_token" binding:"required"`
+	Role        string `json:"role"` // optional, "siswa" atau "instansi"
+}
+
+func generateRandomPassword() string {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, 16)
+	for i := range result {
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		result[i] = chars[num.Int64()]
+	}
+	return string(result)
+}
+
+func LoginGoogle(c *gin.Context) {
+	var input LoginGoogleInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Verifikasi token dengan Google UserInfo API
+	resp, err := http.Get("https://www.googleapis.com/oauth2/v3/userinfo?access_token=" + input.AccessToken)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Gagal terhubung ke server verifikasi Google"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Token Google tidak valid atau kedaluwarsa"})
+		return
+	}
+
+	var googleInfo struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&googleInfo); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengurai respon Google"})
+		return
+	}
+
+	if googleInfo.Email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Email tidak ditemukan di token Google"})
+		return
+	}
+
+	// Cari user berdasarkan email
+	var user models.User
+	err = koneksi.DB.Where("email = ?", googleInfo.Email).First(&user).Error
+	if err != nil {
+		// User belum terdaftar, buat akun baru
+		randPass := generateRandomPassword()
+		hashedPassword, _ := utils.HashPassword(randPass)
+
+		// Set default role sesuai tab yang dipilih
+		role := "student"
+		if input.Role == "instansi" {
+			role = "instansi"
+		}
+
+		user = models.User{
+			Name:     googleInfo.Name,
+			Email:    googleInfo.Email,
+			Password: hashedPassword,
+			Role:     role,
+		}
+
+		if err := koneksi.DB.Create(&user).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mendaftarkan user baru dari Google"})
+			return
+		}
+
+		// Jika role adalah instansi, buat profil instansi kosong
+		if role == "instansi" {
+			instansi := models.Instansi{
+				UserID: &user.ID,
+				Nama:   googleInfo.Name,
+				Alamat: "-",
+				Kontak: "-",
+			}
+			koneksi.DB.Create(&instansi)
+		}
+	}
+
+	// Validasi kesesuaian role tab
+	loginRole := "siswa"
+	if input.Role == "instansi" {
+		loginRole = "instansi"
+	}
+	dbRole := user.Role
+
+	if loginRole == "siswa" && dbRole != "student" && dbRole != "siswa" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Akun ini bukan akun Siswa. Silakan masuk melalui tab yang sesuai."})
+		return
+	}
+
+	if loginRole == "instansi" && dbRole != "instansi" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Akun ini bukan akun Instansi. Silakan masuk melalui tab yang sesuai."})
+		return
+	}
+
+	// Generate JWT Token
+	token, err := utils.GenerateJWT(user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat token akses"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Login Google berhasil",
 		"token":   token,
 		"role":    user.Role,
 		"name":    user.Name,

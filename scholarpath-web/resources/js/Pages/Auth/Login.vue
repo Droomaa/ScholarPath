@@ -35,6 +35,16 @@ onMounted(() => {
         // Clean up URL query parameters without reloading
         window.history.replaceState({}, document.title, window.location.pathname);
     }
+
+    // Load Google GSI client library dynamically
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+        initializeGoogleSignIn();
+    };
+    document.head.appendChild(script);
 });
 
 const submit = async () => {
@@ -115,8 +125,97 @@ const setLoginRole = (role) => {
     showRegisteredSuccess.value = false;
 };
 
+let tokenClient = null;
+
+const initializeGoogleSignIn = () => {
+    if (typeof google !== 'undefined') {
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        if (!clientId) {
+            console.warn('VITE_GOOGLE_CLIENT_ID is not configured in .env file');
+            return;
+        }
+
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: 'email profile',
+            callback: handleGoogleLoginCallback,
+        });
+    }
+};
+
 const loginWithGoogle = () => {
-    alert('Integrasi Google Login sedang disiapkan oleh Tim Merah Delima.');
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+        alert('Integrasi Google Login belum dikonfigurasi. Variabel VITE_GOOGLE_CLIENT_ID tidak ditemukan di file .env.');
+        return;
+    }
+
+    if (typeof google === 'undefined' || !tokenClient) {
+        if (typeof google !== 'undefined') {
+            initializeGoogleSignIn();
+        }
+        
+        if (typeof google === 'undefined' || !tokenClient) {
+            alert('Layanan Google Sign-In tidak tersedia saat ini. Silakan muat ulang halaman atau periksa koneksi internet Anda.');
+            return;
+        }
+    }
+
+    // Minta Access Token melalui Popup Google
+    tokenClient.requestAccessToken();
+};
+
+const handleGoogleLoginCallback = async (response) => {
+    if (!response.access_token) {
+        errorBackend.value = 'Gagal menerima token akses dari Google.';
+        return;
+    }
+
+    errorBackend.value = '';
+    isSubmitting.value = true;
+
+    try {
+        const accessToken = response.access_token;
+        const currentRole = loginRole.value;
+
+        // 1. Hubungkan ke Go Backend
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+        const goResponse = await axios.post(`${backendUrl}/login-google`, {
+            access_token: accessToken,
+            role: currentRole,
+        });
+
+        const data = goResponse.data;
+
+        // Simpan JWT Token dan data user ke localStorage jika valid
+        if (data && data.token) {
+            localStorage.setItem('auth_token', data.token);
+            localStorage.setItem('auth_role', data.role);
+            localStorage.setItem('auth_name', data.name);
+            localStorage.setItem('auth_user_id', data.user_id);
+        }
+
+        // 2. Sinkronisasi ke Laravel Session (Breeze)
+        const laravelResponse = await axios.post(route('login.google-sync'), {
+            access_token: accessToken,
+            role: currentRole,
+        });
+
+        if (laravelResponse.data.success) {
+            window.location.href = route('dashboard');
+        } else {
+            isSubmitting.value = false;
+            errorBackend.value = 'Gagal sinkronisasi sesi web Laravel.';
+        }
+    } catch (error) {
+        isSubmitting.value = false;
+        console.error('Google Sign-In Authentication Failed:', error);
+        if (error.response && error.response.data && error.response.data.error) {
+            errorBackend.value = error.response.data.error;
+        } else {
+            errorBackend.value = 'Autentikasi Google gagal. Pastikan API Go & Laravel Anda berjalan.';
+        }
+    }
 };
 </script>
 

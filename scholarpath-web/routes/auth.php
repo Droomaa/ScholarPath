@@ -27,6 +27,9 @@ Route::middleware('guest')->group(function () {
 
     Route::post('admin/login', [AuthenticatedSessionController::class, 'storeAdmin']);
 
+    Route::post('login-google-sync', [AuthenticatedSessionController::class, 'storeGoogleSync'])
+        ->name('login.google-sync');
+
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 

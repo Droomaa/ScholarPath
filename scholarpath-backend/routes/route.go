@@ -16,6 +16,7 @@ func SetupRouter() *gin.Engine {
 
 	// Rute Publik (Tanpa Token)
 	r.POST("/login", controllers.LoginUser)
+	r.POST("/login-google", controllers.LoginGoogle)
 	r.POST("/register/siswa", controllers.RegisterSiswa)
 	r.POST("/register/instansi", controllers.RegisterInstansi)
 
