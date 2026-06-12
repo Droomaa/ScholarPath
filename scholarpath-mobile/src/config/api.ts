@@ -4,7 +4,7 @@ import { Platform } from "react-native";
  * Override for physical-device testing on the same LAN as your dev machine.
  * Example: '192.168.1.42'
  */
-const LAN_HOST = "192.168.110.222";
+const LAN_HOST = "172.20.10.2";
 
 const DEFAULT_PORT = 8080;
 
