@@ -88,6 +88,7 @@ func SetupRouter() *gin.Engine {
 
 		// Pendaftaran Instansi
 		protected.GET("/instansi/pendaftaran", controllers.GetInstansiApplicants)
+		protected.GET("/instansi/pendaftaran/:id", controllers.GetInstansiApplicantDetail)
 		protected.PUT("/pendaftaran/:id/status", controllers.UpdateApplicantStatus)
 		
 		// --- RUTE KHUSUS ADMIN ---

@@ -29,7 +29,10 @@ func UploadFile(c *gin.Context) {
 	}
 
 	// Kembalikan URL yang bisa diakses oleh frontend
-	fileURL := fmt.Sprintf("http://localhost:8080/uploads/%s", newFileName)
+	fileURL := fmt.Sprintf("%s://%s/uploads/%s", c.Request.URL.Scheme, c.Request.Host, newFileName)
+	if fileURL == "://"+c.Request.Host+"/uploads/"+newFileName {
+		fileURL = fmt.Sprintf("http://%s/uploads/%s", c.Request.Host, newFileName)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "File berhasil diunggah",

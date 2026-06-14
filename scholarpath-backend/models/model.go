@@ -93,15 +93,31 @@ type Beasiswa struct {
 // ==========================================
 
 type Pendaftaran struct {
+	ID             uint      `gorm:"primaryKey;column:id" json:"id"`
+	UserID         uint      `gorm:"column:user_id" json:"user_id"`
+	BeasiswaID     *uint     `gorm:"column:beasiswa_id" json:"beasiswa_id"`
+	OlimpiadeID    *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
+	StatusID       *uint     `gorm:"column:status_id" json:"status_id"`
+	MotivationText string    `gorm:"column:motivation_text" json:"motivation_text"`
+	TanggalDaftar  time.Time `gorm:"column:tanggal_daftar;default:CURRENT_TIMESTAMP" json:"tanggal_daftar"`
+	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+type PendaftaranDokumen struct {
 	ID            uint      `gorm:"primaryKey;column:id" json:"id"`
-	UserID        uint      `gorm:"column:user_id" json:"user_id"`
-	BeasiswaID    *uint     `gorm:"column:beasiswa_id" json:"beasiswa_id"`
-	OlimpiadeID   *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
-	StatusID      *uint     `gorm:"column:status_id" json:"status_id"`
-	TanggalDaftar time.Time `gorm:"column:tanggal_daftar;default:CURRENT_TIMESTAMP" json:"tanggal_daftar"`
+	PendaftaranID uint      `gorm:"column:pendaftaran_id;index" json:"pendaftaran_id"`
+	DocumentKey   string    `gorm:"column:document_key" json:"document_key"`
+	Title         string    `gorm:"column:title" json:"title"`
+	IsMandatory   bool      `gorm:"column:is_mandatory;default:false" json:"is_mandatory"`
+	FileURL       string    `gorm:"column:file_url" json:"file_url"`
+	FileName      string    `gorm:"column:file_name" json:"file_name"`
+	FileSize      int64     `gorm:"column:file_size" json:"file_size"`
 	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
+
+func (PendaftaranDokumen) TableName() string { return "pendaftaran_dokumens" }
 
 type Notification struct {
 	ID        uint      `gorm:"primaryKey;column:id" json:"id"`
