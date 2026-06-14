@@ -92,9 +92,25 @@ export function AiRecommendationWizardScreen() {
         skills: skillLabels,
       });
 
+      // Simpan keahlian ke database profil
       await updateProfile(token, { keahlian });
 
-      const response = await getAIRecommendation(token);
+      // ==========================================
+      // --- MODIFIKASI AI: PERSIAPAN DATA ---
+      // Gabungkan semua skill menjadi satu string untuk Python
+      const combinedSkills = skillLabels.join(', ');
+      
+      // Ambil jenis opportunity yang dipilih (scholarship / competition)
+      // Jika pilih lebih dari 1, kita kosongkan agar backend mencari keduanya
+      let filterType = '';
+      if (formData.opportunityTypes.length === 1) {
+        filterType = formData.opportunityTypes[0]; 
+      }
+
+      // Tembak API dengan menyertakan argumen baru
+      const response = await getAIRecommendation(token, combinedSkills, filterType);
+      // ==========================================
+
       const results = mapAiRecommendations(
         response.data,
         formData,
