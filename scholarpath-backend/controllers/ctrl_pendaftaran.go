@@ -24,7 +24,8 @@ type ApplicantDetail struct {
 	Keahlian      string    `json:"keahlian"`
 	ProgramType   string    `json:"program_type"` // "Beasiswa" ATAU "Olimpiade"
 	ProgramTitle  string    `json:"program_title"`
-	StatusID      *uint     `json:"status_id"`
+	Status        string    `json:"status"`
+	FileBerkas    string    `json:"file_berkas"`
 	TanggalDaftar time.Time `json:"tanggal_daftar"`
 }
 // CREATE PENDAFTARAN
@@ -44,6 +45,25 @@ func CreatePendaftaran(c *gin.Context) {
 
 	// 2. Masukkan userID yang sudah di-parsing dengan aman
 	pendaftaran.UserID = userID
+
+	// Cek Deadline
+	if pendaftaran.BeasiswaID != nil {
+		var beasiswa models.Beasiswa
+		if err := koneksi.DB.First(&beasiswa, *pendaftaran.BeasiswaID).Error; err == nil {
+			if beasiswa.Deadline != nil && time.Now().After(*beasiswa.Deadline) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Pendaftaran ditolak: Program beasiswa ini sudah melewati batas waktu (deadline)."})
+				return
+			}
+		}
+	} else if pendaftaran.OlimpiadeID != nil {
+		var olimpiade models.Olimpiade
+		if err := koneksi.DB.First(&olimpiade, *pendaftaran.OlimpiadeID).Error; err == nil {
+			if olimpiade.Deadline != nil && time.Now().After(*olimpiade.Deadline) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Pendaftaran ditolak: Program olimpiade ini sudah melewati batas waktu (deadline)."})
+				return
+			}
+		}
+	}
 
 	// Set tanggal daftar otomatis ke waktu sekarang jika belum ada
 	if pendaftaran.TanggalDaftar.IsZero() {
@@ -174,12 +194,13 @@ func GetInstansiApplicants(c *gin.Context) {
 				p.id as pendaftaran_id, u.id as student_id, u.name as student_name, u.email as student_email, u.keahlian,
 				CASE WHEN p.beasiswa_id IS NOT NULL THEN 'Beasiswa' ELSE 'Olimpiade' END as program_type,
 				COALESCE(b.nama, o.judul) as program_title,
-				p.status_id, p.tanggal_daftar
+				p.status, p.file_berkas, p.tanggal_daftar
 			FROM pendaftarans p
 			JOIN users u ON p.user_id = u.id
 			LEFT JOIN beasiswas b ON p.beasiswa_id = b.id
 			LEFT JOIN olimpiades o ON p.olimpiade_id = o.id
 			WHERE b.instansi_id = ? OR o.instansi_id = ?
+			ORDER BY p.tanggal_daftar DESC
 		`
 		err = koneksi.DB.Raw(query, instansi.ID, instansi.ID).Scan(&applicants).Error
 	} else {
@@ -189,11 +210,12 @@ func GetInstansiApplicants(c *gin.Context) {
 				p.id as pendaftaran_id, u.id as student_id, u.name as student_name, u.email as student_email, u.keahlian,
 				CASE WHEN p.beasiswa_id IS NOT NULL THEN 'Beasiswa' ELSE 'Olimpiade' END as program_type,
 				COALESCE(b.nama, o.judul) as program_title,
-				p.status_id, p.tanggal_daftar
+				p.status, p.file_berkas, p.tanggal_daftar
 			FROM pendaftarans p
 			JOIN users u ON p.user_id = u.id
 			LEFT JOIN beasiswas b ON p.beasiswa_id = b.id
 			LEFT JOIN olimpiades o ON p.olimpiade_id = o.id
+			ORDER BY p.tanggal_daftar DESC
 		`
 		err = koneksi.DB.Raw(query).Scan(&applicants).Error
 	}
@@ -204,6 +226,54 @@ func GetInstansiApplicants(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": applicants})
+}
+
+// 1.5 GET APPLICANT DETAIL BY PENDAFTARAN ID (Khusus Instansi/Admin)
+func GetApplicantDetail(c *gin.Context) {
+	userID, exists := getUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Anda harus login"})
+		return
+	}
+
+	var user models.User
+	if err := koneksi.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+		return
+	}
+
+	if user.Role != "instansi" && user.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Hanya instansi atau admin yang dapat melihat detail pendaftar"})
+		return
+	}
+
+	pendaftaranID := c.Param("id")
+
+	var applicant ApplicantDetail
+	query := `
+		SELECT 
+			p.id as pendaftaran_id, u.id as student_id, u.name as student_name, u.email as student_email, u.keahlian,
+			CASE WHEN p.beasiswa_id IS NOT NULL THEN 'Beasiswa' ELSE 'Olimpiade' END as program_type,
+			COALESCE(b.nama, o.judul) as program_title,
+			p.status_id, p.file_berkas, p.tanggal_daftar
+		FROM pendaftarans p
+		JOIN users u ON p.user_id = u.id
+		LEFT JOIN beasiswas b ON p.beasiswa_id = b.id
+		LEFT JOIN olimpiades o ON p.olimpiade_id = o.id
+		WHERE p.id = ?
+	`
+	
+	if err := koneksi.DB.Raw(query, pendaftaranID).Scan(&applicant).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal mengambil data: " + err.Error()})
+		return
+	}
+
+	if applicant.PendaftaranID == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Data pendaftaran tidak ditemukan"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": applicant})
 }
 
 // 2. REVIEW APPLICANT STATUS (Mengubah Status Pendaftaran Siswa)
@@ -253,15 +323,15 @@ func UpdateApplicantStatus(c *gin.Context) {
 
 	// Menerima input status baru dari body JSON
 	var input struct {
-		StatusID uint `json:"status_id" binding:"required"`
+		Status string `json:"status" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Format input status_id salah"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Format input status salah"})
 		return
 	}
 
 	// Eksekusi perubahan status
-	pendaftaran.StatusID = &input.StatusID
+	pendaftaran.Status = input.Status
 	koneksi.DB.Save(&pendaftaran)
 
 	c.JSON(http.StatusOK, gin.H{

@@ -20,7 +20,14 @@ func CreateBeasiswa(c *gin.Context) {
 
 func GetAllBeasiswa(c *gin.Context) {
 	var beasiswas []models.Beasiswa
-	koneksi.DB.Find(&beasiswas)
+	query := koneksi.DB
+
+	if search := c.Query("search"); search != "" {
+		likeSearch := "%" + search + "%"
+		query = query.Where("nama ILIKE ? OR deskripsi ILIKE ?", likeSearch, likeSearch)
+	}
+
+	query.Find(&beasiswas)
 	c.JSON(http.StatusOK, gin.H{"data": beasiswas})
 }
 

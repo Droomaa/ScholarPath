@@ -28,10 +28,36 @@ class AuthenticatedSessionController extends Controller
         ]);
     }
 
-    /**
-     * Handle an incoming authentication request.
-     */
     public function store(LoginRequest $request): RedirectResponse
+    {
+        $request->validate([
+            'role' => 'required|in:student,instansi',
+        ]);
+
+        $request->authenticate();
+
+        $request->session()->regenerate();
+
+        $user = $request->user();
+
+        if ($user->role !== $request->role) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                'email' => 'Peran yang dipilih tidak sesuai dengan akun Anda.',
+            ]);
+        }
+
+        if ($user->role === 'instansi') {
+            return redirect()->intended(route('institution.dashboard', absolute: false));
+        }
+
+        return redirect()->intended(route('dashboard', absolute: false));
+    }
+
+    public function storeAdmin(LoginRequest $request): RedirectResponse
     {
         $request->authenticate();
 
@@ -68,7 +94,19 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        $user = $request->user();
+
+        if ($user->role !== 'admin') {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                'email' => 'Peran yang dipilih tidak sesuai dengan akun Anda.',
+            ]);
+        }
+
+        return redirect()->intended(route('admin.dashboard', absolute: false));
     }
 
     /**

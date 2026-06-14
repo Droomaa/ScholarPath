@@ -70,6 +70,8 @@ func SetupRouter() *gin.Engine {
 
 		// Instansi
 		protected.GET("/instansi", controllers.GetAllInstansi)
+		protected.GET("/instansi/me", controllers.GetMyInstansiProfile)
+		protected.PUT("/instansi/me", controllers.UpdateMyInstansiProfile)
 		protected.GET("/instansi/:id", controllers.GetInstansiByID)
 		protected.PUT("/instansi/:id", controllers.UpdateInstansi)
 
@@ -89,6 +91,7 @@ func SetupRouter() *gin.Engine {
 
 		// Pendaftaran Instansi
 		protected.GET("/instansi/pendaftaran", controllers.GetInstansiApplicants)
+		protected.GET("/instansi/pendaftaran/:id", controllers.GetApplicantDetail)
 		protected.PUT("/pendaftaran/:id/status", controllers.UpdateApplicantStatus)
 		
 		// --- RUTE KHUSUS ADMIN ---
@@ -96,12 +99,21 @@ func SetupRouter() *gin.Engine {
 		protected.PUT("/admin/verify/olimpiade/:id", controllers.VerifyOlimpiade)
 		protected.PUT("/admin/verify/beasiswa/:id", controllers.VerifyBeasiswa)
 		protected.POST("/admin/notifications", controllers.CreateNotification)
+<<<<<<< Updated upstream
 		protected.GET("/admin/users", controllers.GetAdminUsers)
 		protected.GET("/admin/stats", controllers.GetAdminStats)
 		protected.GET("/admin/verification-queue", controllers.GetVerificationQueue)
+=======
+		protected.GET("/admin/users", controllers.GetAllUsers)
+		protected.GET("/admin/stats", controllers.GetAdminStats)
+		protected.GET("/admin/pending-verifications", controllers.GetPendingVerificationsQueue)
+		protected.GET("/admin/export", controllers.ExportAdminReport)
+>>>>>>> Stashed changes
 
-		// --- RUTE NOTIFIKASI UMUM (Semua User) ---
+		// --- RUTE NOTIFIKASI & LAPORAN (Semua User) ---
+		protected.POST("/user/report", controllers.ReportInstitution)
 		protected.GET("/user/notifications", controllers.GetMyNotifications)
+		protected.GET("/user/notifications/matches", controllers.GetRecentAIProgramMatches)
 	}
 
 	return r

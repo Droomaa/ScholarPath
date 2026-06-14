@@ -68,6 +68,8 @@ type Olimpiade struct {
 	Kuota            int       `gorm:"column:kuota" json:"kuota"`
 	BiayaPendaftaran float64   `gorm:"column:biaya_pendaftaran" json:"biaya_pendaftaran"`
 	LinkInformasi    string    `gorm:"column:link_informasi" json:"link_informasi"`
+	PersyaratanFile  string    `gorm:"column:persyaratan_file;type:text" json:"persyaratan_file"`
+	Deadline         *time.Time `gorm:"column:deadline" json:"deadline"`
 	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
@@ -84,6 +86,8 @@ type Beasiswa struct {
 	TipeBeasiswa     string    `gorm:"column:tipe_beasiswa" json:"tipe_beasiswa"`
 	NominalPendanaan float64   `gorm:"column:nominal_pendanaan" json:"nominal_pendanaan"`
 	LinkInformasi    string    `gorm:"column:link_informasi" json:"link_informasi"`
+	PersyaratanFile  string    `gorm:"column:persyaratan_file;type:text" json:"persyaratan_file"`
+	Deadline         *time.Time `gorm:"column:deadline" json:"deadline"`
 	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
@@ -97,8 +101,10 @@ type Pendaftaran struct {
 	UserID        uint      `gorm:"column:user_id" json:"user_id"`
 	BeasiswaID    *uint     `gorm:"column:beasiswa_id" json:"beasiswa_id"`
 	OlimpiadeID   *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
-	StatusID      *uint     `gorm:"column:status_id" json:"status_id"`
-	TanggalDaftar time.Time `gorm:"column:tanggal_daftar;default:CURRENT_TIMESTAMP" json:"tanggal_daftar"`
+	Status        string    `gorm:"column:status;default:'Reviewing'" json:"status"`
+	Alasan        string    `gorm:"column:alasan;type:text" json:"alasan"`
+	FileBerkas    string    `gorm:"column:file_berkas;type:text" json:"file_berkas"`
+	TanggalDaftar time.Time `gorm:"column:tanggal_daftar;autoCreateTime" json:"tanggal_daftar"`
 	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
@@ -124,4 +130,12 @@ type Wishlist struct {
 	OlimpiadeID *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+type Report struct {
+	ID         uint      `gorm:"primaryKey;column:id" json:"id"`
+	SiswaID    uint      `gorm:"column:siswa_id" json:"siswa_id"`
+	InstansiID uint      `gorm:"column:instansi_id" json:"instansi_id"`
+	Alasan     string    `gorm:"column:alasan" json:"alasan"`
+	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }

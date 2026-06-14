@@ -99,3 +99,49 @@ func GetMyProfile(c *gin.Context) {
 	
 	c.JSON(http.StatusOK, gin.H{"data": user})
 }
+
+// GET SEMUA USERS (UNTUK ADMIN)
+func GetAllUsers(c *gin.Context) {
+	userID, exists := getUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Anda harus login"})
+		return
+	}
+
+	var admin models.User
+	if err := koneksi.DB.First(&admin, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+		return
+	}
+	if admin.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Akses ditolak: Khusus Admin"})
+		return
+	}
+
+	var users []models.User
+	if err := koneksi.DB.Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+// REPORT INSTITUTION
+func ReportInstitution(c *gin.Context) {
+	userID, exists := getUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Anda harus login"})
+		return
+	}
+
+	var input models.Report
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	input.SiswaID = userID
+
+	koneksi.DB.Create(&input)
+	c.JSON(http.StatusCreated, gin.H{"message": "Laporan berhasil dikirim", "data": input})
+}

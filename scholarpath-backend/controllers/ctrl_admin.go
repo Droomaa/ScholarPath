@@ -1,9 +1,13 @@
 package controllers
 
 import (
+	"encoding/csv"
+	"fmt"
 	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -49,6 +53,48 @@ func VerifyInstansi(c *gin.Context) {
 	koneksi.DB.Save(&instansi)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Akun Instansi berhasil diverifikasi", "data": instansi})
+}
+
+// 6. GET ADMIN STATS
+func GetAdminStats(c *gin.Context) {
+	_, isAllowed := enforceAdminRole(c)
+	if !isAllowed {
+		return
+	}
+
+	var totalStudents int64
+	var totalInstitutions int64
+	var pendingInstansi int64
+	var reportedContent int64
+
+	koneksi.DB.Model(&models.User{}).Where("role = ?", "student").Count(&totalStudents)
+	koneksi.DB.Model(&models.User{}).Where("role = ?", "instansi").Count(&totalInstitutions)
+	koneksi.DB.Model(&models.Instansi{}).Where("is_verified = ?", false).Count(&pendingInstansi)
+	koneksi.DB.Model(&models.Report{}).Count(&reportedContent)
+
+	var registrationTrend [7]int64
+	now := time.Now()
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	for i := 6; i >= 0; i-- {
+		startOfDay := startOfToday.AddDate(0, 0, -i)
+		endOfDay := startOfDay.AddDate(0, 0, 1)
+
+		var count int64
+		koneksi.DB.Model(&models.Instansi{}).
+			Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).
+			Count(&count)
+		registrationTrend[6-i] = count
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"totalStudents": totalStudents,
+			"totalInstitutions": totalInstitutions,
+			"pendingVerifications": pendingInstansi,
+			"reportedContent": reportedContent,
+			"registrationTrend": registrationTrend,
+		},
+	})
 }
 
 // 2. VERIFY OLIMPIADE
@@ -131,6 +177,7 @@ func GetMyNotifications(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": notifs})
 }
 
+<<<<<<< Updated upstream
 // 6. GET ALL USERS FOR USER MANAGEMENT
 type UserListItem struct {
 	ID         uint   `json:"id"`
@@ -143,11 +190,16 @@ type UserListItem struct {
 }
 
 func GetAdminUsers(c *gin.Context) {
+=======
+// 7. GET PENDING VERIFICATIONS QUEUE
+func GetPendingVerificationsQueue(c *gin.Context) {
+>>>>>>> Stashed changes
 	_, isAllowed := enforceAdminRole(c)
 	if !isAllowed {
 		return
 	}
 
+<<<<<<< Updated upstream
 	var users []models.User
 	if err := koneksi.DB.Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -289,4 +341,122 @@ func GetVerificationQueue(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": queue})
+=======
+	type QueueItem struct {
+		ID       string `json:"id"`
+		Entity   string `json:"entity"`
+		Provider string `json:"provider"`
+		Type     string `json:"type"`
+		Date     string `json:"date"`
+		Status   string `json:"status"`
+		Initial  string `json:"initial"`
+		Color    string `json:"color"`
+	}
+
+	var items []QueueItem
+
+	var instansis []models.Instansi
+	koneksi.DB.Where("is_verified = ?", false).Find(&instansis)
+	for _, inst := range instansis {
+		initial := "I"
+		if len(inst.Nama) > 0 {
+			initial = string(inst.Nama[0])
+		}
+		items = append(items, QueueItem{
+			ID: "INST-" + fmt.Sprintf("%d", inst.ID),
+			Entity: inst.Nama,
+			Provider: "Academic Institution",
+			Type: "Partner Account",
+			Date: inst.CreatedAt.Format("Jan 02, 2006"),
+			Status: "PENDING",
+			Initial: initial,
+			Color: "green",
+		})
+	}
+
+	// Beasiswa
+	var beasiswas []models.Beasiswa
+	koneksi.DB.Where("verified_by IS NULL").Find(&beasiswas)
+	for _, b := range beasiswas {
+		providerName := "Private Foundation"
+		if b.InstansiID != nil {
+			providerName = "Instansi Terdaftar"
+		}
+		initial := "S"
+		if len(b.Nama) > 0 {
+			initial = string(b.Nama[0])
+		}
+		items = append(items, QueueItem{
+			ID: "BEA-" + fmt.Sprintf("%d", b.ID),
+			Entity: b.Nama,
+			Provider: providerName,
+			Type: "Scholarship Content",
+			Date: b.CreatedAt.Format("Jan 02, 2006"),
+			Status: "PENDING",
+			Initial: initial,
+			Color: "blue",
+		})
+	}
+
+	// Olimpiade
+	var olimpiades []models.Olimpiade
+	koneksi.DB.Where("verified_by IS NULL").Find(&olimpiades)
+	for _, o := range olimpiades {
+		providerName := "Event Organizer"
+		if o.InstansiID != nil {
+			providerName = "Instansi Terdaftar"
+		}
+		initial := "C"
+		if len(o.Judul) > 0 {
+			initial = string(o.Judul[0])
+		}
+		items = append(items, QueueItem{
+			ID: "OLI-" + fmt.Sprintf("%d", o.ID),
+			Entity: o.Judul,
+			Provider: providerName,
+			Type: "Competition Content",
+			Date: o.CreatedAt.Format("Jan 02, 2006"),
+			Status: "PENDING",
+			Initial: initial,
+			Color: "purple",
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": items})
+}
+
+// 8. EXPORT ADMIN REPORT CSV
+func ExportAdminReport(c *gin.Context) {
+	_, isAllowed := enforceAdminRole(c)
+	if !isAllowed {
+		return
+	}
+
+	c.Writer.Header().Set("Content-Type", "text/csv")
+	c.Writer.Header().Set("Content-Disposition", "attachment;filename=admin_report.csv")
+
+	writer := csv.NewWriter(c.Writer)
+	defer writer.Flush()
+
+	// Header
+	writer.Write([]string{"ID", "Nama Instansi", "Alamat", "Kontak", "Status Terverifikasi", "Tanggal Bergabung"})
+
+	var instansis []models.Instansi
+	koneksi.DB.Find(&instansis)
+
+	for _, inst := range instansis {
+		status := "Pending"
+		if inst.IsVerified {
+			status = "Verified"
+		}
+		writer.Write([]string{
+			strconv.Itoa(int(inst.ID)),
+			inst.Nama,
+			inst.Alamat,
+			inst.Kontak,
+			status,
+			inst.CreatedAt.Format("2006-01-02"),
+		})
+	}
+>>>>>>> Stashed changes
 }

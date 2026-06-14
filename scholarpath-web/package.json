@@ -19,5 +19,9 @@
         "tailwindcss": "^3.2.1",
         "vite": "^8.0.0",
         "vue": "^3.4.0"
+    },
+    "dependencies": {
+        "@lucide/vue": "^1.18.0",
+        "@vueuse/core": "^14.3.0"
     }
 }

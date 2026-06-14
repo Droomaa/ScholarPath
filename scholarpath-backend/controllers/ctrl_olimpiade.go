@@ -68,7 +68,14 @@ func CreateOlimpiade(c *gin.Context) {
 // GET ALL OLIMPIADE (Terbuka untuk semua yang sudah login, termasuk Siswa)
 func GetAllOlimpiade(c *gin.Context) {
 	var olimpiades []models.Olimpiade
-	koneksi.DB.Find(&olimpiades)
+	query := koneksi.DB
+
+	if search := c.Query("search"); search != "" {
+		likeSearch := "%" + search + "%"
+		query = query.Where("judul ILIKE ? OR deskripsi ILIKE ?", likeSearch, likeSearch)
+	}
+
+	query.Find(&olimpiades)
 	c.JSON(http.StatusOK, gin.H{"data": olimpiades})
 }
 

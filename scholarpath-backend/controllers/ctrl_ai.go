@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -90,6 +91,85 @@ func GetAIRecommendation(c *gin.Context) {
 	// Kembalikan ke Frontend
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Berhasil mendapatkan rekomendasi beasiswa",
+		"data":    hasilRekomendasi,
+	})
+}
+
+// Struktur notifikasi program baru dengan Match Score
+type RecentProgramMatch struct {
+	ID         uint      `json:"id"`
+	Type       string    `json:"type"`
+	Judul      string    `json:"judul"`
+	MatchScore float64   `json:"match_score"`
+	CreatedAt  time.Time `json:"created_at"`
+	Color      string    `json:"color"`
+}
+
+func GetRecentAIProgramMatches(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Anda harus login"})
+		return
+	}
+
+	var user models.User
+	if err := koneksi.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+		return
+	}
+
+	var listBeasiswa []models.Beasiswa
+	koneksi.DB.Order("created_at desc").Limit(5).Find(&listBeasiswa)
+
+	var listOlimpiade []models.Olimpiade
+	koneksi.DB.Order("created_at desc").Limit(5).Find(&listOlimpiade)
+
+	var hasilRekomendasi []RecentProgramMatch
+
+	// Hitung AI Score untuk Beasiswa
+	for _, b := range listBeasiswa {
+		score := 0.0
+		if user.Keahlian != "" {
+			aiReq := AIRequest{UserProfile: user.Keahlian, BeasiswaRequirement: b.Deskripsi}
+			reqBody, _ := json.Marshal(aiReq)
+			if resp, err := http.Post("http://localhost:8001/api/match", "application/json", bytes.NewBuffer(reqBody)); err == nil {
+				var aiRes AIResponse
+				body, _ := io.ReadAll(resp.Body)
+				json.Unmarshal(body, &aiRes)
+				resp.Body.Close()
+				score = aiRes.MatchScore
+			}
+		}
+		hasilRekomendasi = append(hasilRekomendasi, RecentProgramMatch{
+			ID: b.ID, Type: "beasiswa", Judul: b.Nama, MatchScore: score, CreatedAt: b.CreatedAt, Color: "brand",
+		})
+	}
+
+	// Hitung AI Score untuk Olimpiade
+	for _, o := range listOlimpiade {
+		score := 0.0
+		if user.Keahlian != "" {
+			aiReq := AIRequest{UserProfile: user.Keahlian, BeasiswaRequirement: o.Deskripsi}
+			reqBody, _ := json.Marshal(aiReq)
+			if resp, err := http.Post("http://localhost:8001/api/match", "application/json", bytes.NewBuffer(reqBody)); err == nil {
+				var aiRes AIResponse
+				body, _ := io.ReadAll(resp.Body)
+				json.Unmarshal(body, &aiRes)
+				resp.Body.Close()
+				score = aiRes.MatchScore
+			}
+		}
+		hasilRekomendasi = append(hasilRekomendasi, RecentProgramMatch{
+			ID: o.ID, Type: "olimpiade", Judul: o.Judul, MatchScore: score, CreatedAt: o.CreatedAt, Color: "green",
+		})
+	}
+
+	sort.Slice(hasilRekomendasi, func(i, j int) bool {
+		return hasilRekomendasi[i].CreatedAt.After(hasilRekomendasi[j].CreatedAt)
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Berhasil",
 		"data":    hasilRekomendasi,
 	})
 }

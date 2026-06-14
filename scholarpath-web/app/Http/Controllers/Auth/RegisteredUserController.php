@@ -35,13 +35,27 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'role' => 'required|in:student,instansi',
+            'phone' => 'nullable|string|max:20', // Add phone validation
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => $request->role,
         ]);
+
+        // Automatically create an instansi record
+        if ($request->role === 'instansi') {
+            \Illuminate\Support\Facades\DB::table('instansis')->insert([
+                'user_id' => $user->id,
+                'nama' => $request->name,
+                'kontak' => $request->phone ?? '',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
 
         event(new Registered($user));
 

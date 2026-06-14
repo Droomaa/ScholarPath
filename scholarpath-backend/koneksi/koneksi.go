@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"scholarpath-backend/models"
 )
 
 var DB *gorm.DB
@@ -23,6 +24,7 @@ func KoneksiDatabase() {
 	DB = database
 	log.Println("Database PostgreSQL berhasil terhubung!")
 
+<<<<<<< Updated upstream
 	// Tambah kolom secara manual menggunakan raw SQL ke tabel users agar tidak merusak constraint Laravel
 	database.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(255) DEFAULT 'student'`)
 	database.Exec(`ALTER TABLE users ADD COLUMN IF NOT EXISTS keahlian TEXT`)
@@ -43,5 +45,18 @@ func KoneksiDatabase() {
 		log.Println("Gagal menjalankan AutoMigrate GORM:", err)
 	} else {
 		log.Println("Schema database berhasil disinkronisasi melalui GORM AutoMigrate!")
+=======
+	// AutoMigrate models
+	err = DB.AutoMigrate(
+		&models.Beasiswa{},
+		&models.Olimpiade{},
+		&models.Pendaftaran{},
+		&models.Report{},
+	)
+	if err != nil {
+		log.Println("Gagal migrasi database: ", err)
+	} else {
+		log.Println("Migrasi database berhasil.")
+>>>>>>> Stashed changes
 	}
 }
