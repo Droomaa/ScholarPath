@@ -54,6 +54,38 @@ export type GetInstansiApplicantsResponse = {
   data: InstansiApplicantRecord[];
 };
 
+export type InstansiApplicantDocumentRecord = {
+  id: number;
+  document_key: string;
+  title: string;
+  is_mandatory: boolean;
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  verification_status: 'verified' | 'pending' | string;
+};
+
+export type InstansiApplicantDetailRecord = {
+  pendaftaran_id: number;
+  student_id: number;
+  student_name: string;
+  student_email: string;
+  jenjang_nama: string;
+  major: string;
+  keahlian: string;
+  motivation_text: string;
+  program_type: string;
+  program_title: string;
+  status_id: number | null;
+  tanggal_daftar: string;
+  mandatory_documents: InstansiApplicantDocumentRecord[];
+  other_documents: InstansiApplicantDocumentRecord[];
+};
+
+export type GetInstansiApplicantDetailResponse = {
+  data: InstansiApplicantDetailRecord;
+};
+
 export type UpdateApplicantStatusRequest = {
   status_id: number;
 };

@@ -86,13 +86,12 @@ export type InstituteApplicant = {
 
 export type InstituteApplicantDetail = InstituteApplicant & {
   email: string;
-  motivationAnswer: string;
+  educationLevel: string;
   trackLabel: string;
-  rankLabel?: string;
-  topPercentBadge?: string;
   skills: ApplicantSkill[];
   achievements: ApplicantAchievement[];
-  documents: ApplicantUploadedDocument[];
+  mandatoryDocuments: ApplicantUploadedDocument[];
+  otherDocuments: ApplicantUploadedDocument[];
 };
 
 export type InstituteSessionState = {

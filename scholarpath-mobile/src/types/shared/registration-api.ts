@@ -17,9 +17,20 @@ export type RiwayatPendaftaranRecord = {
   tanggal_daftar: string;
 };
 
+export type CreatePendaftaranDocumentInput = {
+  document_key: string;
+  title: string;
+  is_mandatory: boolean;
+  file_url: string;
+  file_name: string;
+  file_size: number;
+};
+
 export type CreatePendaftaranRequest = {
   beasiswa_id?: number;
   olimpiade_id?: number;
+  motivation_text?: string;
+  documents?: CreatePendaftaranDocumentInput[];
 };
 
 export type CreatePendaftaranResponse = {

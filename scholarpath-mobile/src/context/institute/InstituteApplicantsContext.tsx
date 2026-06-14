@@ -9,11 +9,12 @@ import {
 } from 'react';
 
 import { useInstituteSession } from '@/src/context/institute/InstituteSessionContext';
-import { buildApplicantDetail } from '@/src/features/institute/constants/institute-applicant-details';
 import { ApiError } from '@/src/services/api/client';
 import {
+  getInstansiApplicantDetail,
   getInstansiApplicants,
   mapApplicantStatusToStatusId,
+  mapInstansiApplicantDetail,
   mapInstansiApplicantList,
   resolveInstituteApplicantError,
   updateApplicantStatus,
@@ -26,13 +27,17 @@ import {
 
 type InstituteApplicantsContextValue = {
   applicants: InstituteApplicant[];
+  applicantDetails: Record<string, InstituteApplicantDetail>;
   isLoading: boolean;
   isRefreshing: boolean;
   isUpdatingStatus: boolean;
+  isLoadingDetail: boolean;
+  detailError: string | null;
   error: string | null;
   refreshApplicants: () => Promise<void>;
   getApplicantById: (id: string) => InstituteApplicant | undefined;
   getApplicantDetailById: (id: string) => InstituteApplicantDetail | undefined;
+  loadApplicantDetail: (id: string) => Promise<void>;
   updateApplicantStatus: (id: string, status: ApplicantStatus) => Promise<void>;
 };
 
@@ -41,15 +46,21 @@ const InstituteApplicantsContext = createContext<InstituteApplicantsContextValue
 export function InstituteApplicantsProvider({ children }: { children: ReactNode }) {
   const { token, isAuthenticated } = useInstituteSession();
   const [applicants, setApplicants] = useState<InstituteApplicant[]>([]);
+  const [applicantDetails, setApplicantDetails] = useState<Record<string, InstituteApplicantDetail>>(
+    {}
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadApplicants = useCallback(
     async (mode: 'initial' | 'refresh' | 'silent' = 'silent') => {
       if (!token || !isAuthenticated) {
         setApplicants([]);
+        setApplicantDetails({});
         setError(null);
         return;
       }
@@ -82,6 +93,7 @@ export function InstituteApplicantsProvider({ children }: { children: ReactNode 
   useEffect(() => {
     if (!isAuthenticated || !token) {
       setApplicants([]);
+      setApplicantDetails({});
       setError(null);
       return;
     }
@@ -92,6 +104,35 @@ export function InstituteApplicantsProvider({ children }: { children: ReactNode 
   const refreshApplicants = useCallback(async () => {
     await loadApplicants('refresh');
   }, [loadApplicants]);
+
+  const loadApplicantDetail = useCallback(
+    async (id: string) => {
+      if (!token) {
+        setDetailError('Sesi tidak valid. Silakan login kembali.');
+        return;
+      }
+
+      const applicant = applicants.find((item) => item.id === id);
+      if (!applicant) {
+        setDetailError('Pendaftar tidak ditemukan.');
+        return;
+      }
+
+      setIsLoadingDetail(true);
+      setDetailError(null);
+
+      try {
+        const response = await getInstansiApplicantDetail(token, applicant.pendaftaranId);
+        const detail = mapInstansiApplicantDetail(response.data);
+        setApplicantDetails((current) => ({ ...current, [id]: detail }));
+      } catch (err) {
+        setDetailError(resolveInstituteApplicantError(err));
+      } finally {
+        setIsLoadingDetail(false);
+      }
+    },
+    [applicants, token]
+  );
 
   const updateApplicantStatusById = useCallback(
     async (id: string, status: ApplicantStatus) => {
@@ -112,6 +153,21 @@ export function InstituteApplicantsProvider({ children }: { children: ReactNode 
         });
 
         await loadApplicants('silent');
+        setApplicantDetails((current) => {
+          const existing = current[id];
+          if (!existing) {
+            return current;
+          }
+
+          return {
+            ...current,
+            [id]: {
+              ...existing,
+              status,
+              statusId: mapApplicantStatusToStatusId(status),
+            },
+          };
+        });
       } finally {
         setIsUpdatingStatus(false);
       }
@@ -122,24 +178,29 @@ export function InstituteApplicantsProvider({ children }: { children: ReactNode 
   const value = useMemo<InstituteApplicantsContextValue>(
     () => ({
       applicants,
+      applicantDetails,
       isLoading,
       isRefreshing,
       isUpdatingStatus,
+      isLoadingDetail,
+      detailError,
       error,
       refreshApplicants,
       getApplicantById: (id) => applicants.find((applicant) => applicant.id === id),
-      getApplicantDetailById: (id) => {
-        const applicant = applicants.find((item) => item.id === id);
-        return applicant ? buildApplicantDetail(applicant) : undefined;
-      },
+      getApplicantDetailById: (id) => applicantDetails[id],
+      loadApplicantDetail,
       updateApplicantStatus: updateApplicantStatusById,
     }),
     [
+      applicantDetails,
       applicants,
+      detailError,
       error,
       isLoading,
+      isLoadingDetail,
       isRefreshing,
       isUpdatingStatus,
+      loadApplicantDetail,
       refreshApplicants,
       updateApplicantStatusById,
     ]

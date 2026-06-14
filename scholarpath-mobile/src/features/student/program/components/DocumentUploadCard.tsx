@@ -13,6 +13,7 @@ type DocumentUploadCardProps = {
   requirement: ProgramDocumentRequirement;
   uploaded?: UploadedDocument;
   disabled?: boolean;
+  largeTitle?: boolean;
   onUploadPress: () => void;
 };
 
@@ -30,6 +31,7 @@ export function DocumentUploadCard({
   requirement,
   uploaded,
   disabled = false,
+  largeTitle = false,
   onUploadPress,
 }: DocumentUploadCardProps) {
   const iconConfig = iconMap[requirement.icon];
@@ -55,7 +57,7 @@ export function DocumentUploadCard({
 
       <View style={styles.content}>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>{requirement.title}</Text>
+          <Text style={[styles.title, largeTitle && styles.titleLarge]}>{requirement.title}</Text>
           <View style={[styles.statusIcon, hasUpload ? styles.statusDone : styles.statusPending]}>
             {hasUpload ? (
               <Ionicons name="checkmark" size={12} color={AuthColors.white} />
@@ -135,6 +137,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     letterSpacing: 0.14,
     color: AuthColors.textPrimary,
+  },
+  titleLarge: {
+    fontSize: 20,
   },
   statusIcon: {
     width: 20,

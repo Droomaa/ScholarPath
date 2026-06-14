@@ -17,14 +17,20 @@ import { useApplications } from '@/src/context/shared/ApplicationContext';
 import { useStudentSession } from '@/src/context/student/StudentSessionContext';
 import { useProgramById } from '@/src/hooks/useProgramById';
 import {
-  DocumentUploadCard,
   EligibilityTermsSection,
+  MandatoryDocumentSection,
   RegistrationFooter,
   RegistrationHeader,
   RegistrationHeroSection,
+  RequiredDocumentsSection,
 } from '@/src/features/student/program/components';
 import { formatDaysLeftLabel } from '@/src/features/student/program/utils/deadline-countdown';
 import { pickPdfDocument } from '@/src/features/student/program/utils/pick-pdf-document';
+import {
+  MANDATORY_CV_DOCUMENT_ID,
+  requiresMandatoryCv,
+} from '@/src/features/student/program/constants/mandatory-registration-documents';
+import { uploadRegistrationDocuments } from '@/src/features/student/program/utils/upload-registration-documents';
 import { getProgramRegistrationConfig } from '@/src/features/student/program/utils/program-registration-config';
 import { ApiError } from '@/src/services/api/client';
 import { parseProgramCompositeId, parsedProgramIdToApiPayload } from '@/src/services/explore';
@@ -44,9 +50,12 @@ const emptyDraft: ProgramRegistrationDraft = {
 
 function resolveActiveProgramStatus(
   draft: ProgramRegistrationDraft,
-  requiredDocumentIds: string[]
+  requiredDocumentIds: string[],
+  needsMandatoryCv: boolean
 ): ActiveProgramStatus {
-  const requiredUploaded = requiredDocumentIds.every((docId) => Boolean(draft.documents[docId]));
+  const mandatoryCvReady = !needsMandatoryCv || Boolean(draft.documents[MANDATORY_CV_DOCUMENT_ID]);
+  const requiredUploaded =
+    mandatoryCvReady && requiredDocumentIds.every((docId) => Boolean(draft.documents[docId]));
   const hasProgress =
     draft.agreedToTerms ||
     Object.keys(draft.documents).length > 0 ||
@@ -137,9 +146,11 @@ export function ProgramRegisterScreen() {
   }
 
   const documentsEnabled = draft.agreedToTerms;
+  const needsMandatoryCv = requiresMandatoryCv(program.category);
 
   const isSubmitReady =
     draft.agreedToTerms &&
+    (!needsMandatoryCv || Boolean(draft.documents[MANDATORY_CV_DOCUMENT_ID])) &&
     requiredDocumentIds.every((docId) => Boolean(draft.documents[docId])) &&
     draft.motivationAnswer.trim().length > 0;
 
@@ -147,7 +158,7 @@ export function ProgramRegisterScreen() {
     setDraft(nextDraft);
     saveRegistrationDraft(program.id, nextDraft);
 
-    const status = resolveActiveProgramStatus(nextDraft, requiredDocumentIds);
+    const status = resolveActiveProgramStatus(nextDraft, requiredDocumentIds, needsMandatoryCv);
     const activeIdToUse = activeProgram?.id ?? `active-${program.id}-${Date.now()}`;
 
     upsertActiveProgram({
@@ -192,7 +203,9 @@ export function ProgramRegisterScreen() {
     if (!isSubmitReady) {
       Alert.alert(
         'Form belum lengkap',
-        'Setujui syarat, unggah semua dokumen wajib, dan isi motivasi sebelum submit.'
+        needsMandatoryCv
+          ? 'Setujui syarat, unggah CV wajib, semua dokumen wajib program, dan isi motivasi sebelum submit.'
+          : 'Setujui syarat, unggah semua dokumen wajib program, dan isi motivasi sebelum submit.'
       );
       return;
     }
@@ -218,7 +231,18 @@ export function ProgramRegisterScreen() {
     setIsSubmitting(true);
 
     try {
-      await createPendaftaran(token, parsedProgramIdToApiPayload(parsed));
+      const documents = await uploadRegistrationDocuments({
+        token,
+        draftDocuments: draft.documents,
+        requiredDocuments: registrationConfig.requiredDocuments,
+        includeMandatoryCv: needsMandatoryCv,
+      });
+
+      await createPendaftaran(token, {
+        ...parsedProgramIdToApiPayload(parsed),
+        motivation_text: draft.motivationAnswer.trim(),
+        documents,
+      });
       removeActiveProgram(activeIdToUse);
       await refreshRegistrations();
 
@@ -261,26 +285,20 @@ export function ProgramRegisterScreen() {
           onAgreedChange={(agreed) => syncDraft({ ...draft, agreedToTerms: agreed })}
         />
 
-        <View style={[styles.section, !documentsEnabled && styles.sectionDisabled]}>
-          <Text style={styles.sectionTitle}>Required Documents (PDF)</Text>
-          {!documentsEnabled ? (
-            <Text style={styles.sectionHint}>
-              Setujui Eligibility & Terms terlebih dahulu untuk mengunggah dokumen.
-            </Text>
-          ) : null}
+        {needsMandatoryCv ? (
+          <MandatoryDocumentSection
+            disabled={!documentsEnabled}
+            uploaded={draft.documents[MANDATORY_CV_DOCUMENT_ID] as UploadedDocument | undefined}
+            onUploadPress={() => handleUpload(MANDATORY_CV_DOCUMENT_ID)}
+          />
+        ) : null}
 
-          <View style={styles.documentList}>
-            {registrationConfig.requiredDocuments.map((requirement) => (
-              <DocumentUploadCard
-                key={requirement.id}
-                requirement={requirement}
-                uploaded={draft.documents[requirement.id] as UploadedDocument | undefined}
-                disabled={!documentsEnabled}
-                onUploadPress={() => handleUpload(requirement.id)}
-              />
-            ))}
-          </View>
-        </View>
+        <RequiredDocumentsSection
+          disabled={!documentsEnabled}
+          requirements={registrationConfig.requiredDocuments}
+          documents={draft.documents}
+          onUploadPress={handleUpload}
+        />
 
         <View style={[styles.section, !documentsEnabled && styles.sectionDisabled]}>
           <Text style={styles.motivationLabel}>{registrationConfig.motivationQuestion}</Text>
@@ -334,27 +352,10 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   section: {
-    gap: 16,
+    gap: 14,
   },
   sectionDisabled: {
     opacity: 0.55,
-  },
-  sectionTitle: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 20,
-    lineHeight: 28,
-    color: AuthColors.textPrimary,
-    paddingHorizontal: 4,
-  },
-  sectionHint: {
-    ...AuthTypography.profileInput,
-    fontSize: 14,
-    lineHeight: 20,
-    color: AuthColors.textMuted,
-    paddingHorizontal: 4,
-  },
-  documentList: {
-    gap: 16,
   },
   motivationLabel: {
     fontFamily: FontFamily.semiBold,

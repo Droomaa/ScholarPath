@@ -3,7 +3,7 @@ export { ApplicantCard } from './ApplicantCard';
 export { ApplicantDetailHero } from './ApplicantDetailHero';
 export { ApplicantDocumentRow } from './ApplicantDocumentRow';
 export { ApplicantFilterChips } from './ApplicantFilterChips';
-export { ApplicantMotivationCard } from './ApplicantMotivationCard';
+export { ApplicantDataCard } from './ApplicantDataCard';
 export { ApplicantProgramChips } from './ApplicantProgramChips';
 export { ApplicantSkillsCard } from './ApplicantSkillsCard';
 export { ApplicantStatsGrid } from './ApplicantStatsGrid';

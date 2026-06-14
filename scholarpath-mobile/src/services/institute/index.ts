@@ -4,7 +4,7 @@ export {
   loginInstansi,
   registerInstansi,
 } from '@/src/services/institute/auth-api';
-export { getInstansiApplicants, updateApplicantStatus } from '@/src/services/institute/applicants-api';
+export { getInstansiApplicants, getInstansiApplicantDetail, updateApplicantStatus } from '@/src/services/institute/applicants-api';
 export { computeInstituteDashboardStats } from '@/src/services/institute/compute-dashboard-stats';
 export {
   applicantMatchesProgram,
@@ -28,3 +28,4 @@ export {
   mapInstansiApplicantList,
   resolveInstituteApplicantError,
 } from '@/src/services/institute/map-institute-applicants';
+export { mapInstansiApplicantDetail } from '@/src/services/institute/map-institute-applicant-detail';

@@ -1,17 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useInstituteApplicants } from '@/src/context/institute/InstituteApplicantsContext';
 import {
   ApplicantAchievementsCard,
+  ApplicantDataCard,
   ApplicantDecisionModal,
   ApplicantDetailHero,
   ApplicantDocumentRow,
-  ApplicantMotivationCard,
   ApplicantSkillsCard,
 } from '@/src/features/institute/components';
 import { ApiError } from '@/src/services/api/client';
@@ -27,9 +27,58 @@ export function InstituteApplicantDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const { getApplicantDetailById, updateApplicantStatus, isUpdatingStatus } = useInstituteApplicants();
+  const {
+    getApplicantById,
+    getApplicantDetailById,
+    loadApplicantDetail,
+    updateApplicantStatus,
+    isUpdatingStatus,
+    isLoadingDetail,
+    detailError,
+  } = useInstituteApplicants();
+  const listApplicant = id ? getApplicantById(id) : undefined;
   const applicant = id ? getApplicantDetailById(id) : undefined;
   const [decision, setDecision] = useState<DecisionState | null>(null);
+
+  useEffect(() => {
+    if (id) {
+      void loadApplicantDetail(id);
+    }
+  }, [id, loadApplicantDetail]);
+
+  if (!listApplicant && !isLoadingDetail) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <Text style={styles.notFound}>Applicant not found.</Text>
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.backLink}>Go back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (isLoadingDetail && !applicant) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <ActivityIndicator size="large" color={AuthColors.profileBrand} />
+        <Text style={styles.loadingText}>Memuat detail pendaftar...</Text>
+      </View>
+    );
+  }
+
+  if (detailError && !applicant) {
+    return (
+      <View style={[styles.screen, styles.centered]}>
+        <Text style={styles.notFound}>{detailError}</Text>
+        <Pressable onPress={() => id && void loadApplicantDetail(id)}>
+          <Text style={styles.backLink}>Coba lagi</Text>
+        </Pressable>
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.backLink}>Go back</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   if (!applicant) {
     return (
@@ -43,6 +92,7 @@ export function InstituteApplicantDetailScreen() {
   }
 
   const isPending = applicant.status === 'pending';
+  const showMandatoryDocuments = applicant.programType === 'Beasiswa';
 
   const handleViewDocument = async (document: ApplicantUploadedDocument) => {
     Alert.alert(document.title, `View uploaded file (${document.sizeLabel})?`, [
@@ -114,22 +164,65 @@ export function InstituteApplicantDetailScreen() {
         <ApplicantDetailHero applicant={applicant} />
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Academic Profile</Text>
-          <ApplicantMotivationCard motivationAnswer={applicant.motivationAnswer} />
-          <ApplicantSkillsCard skills={applicant.skills} />
-          <ApplicantAchievementsCard achievements={applicant.achievements} />
+          <Text style={styles.sectionTitle}>Applicants Data</Text>
+          <ApplicantDataCard
+            fullName={applicant.name}
+            educationLevel={applicant.educationLevel}
+            major={applicant.major}
+            email={applicant.email}
+          />
         </View>
 
+        {applicant.skills.length > 0 ? (
+          <ApplicantSkillsCard skills={applicant.skills} />
+        ) : null}
+        {applicant.achievements.length > 0 ? (
+          <ApplicantAchievementsCard achievements={applicant.achievements} />
+        ) : null}
+
+        {showMandatoryDocuments ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Mandatory Document</Text>
+              <Text style={styles.verifyAllText}>Verify All</Text>
+            </View>
+            <View style={styles.documentsList}>
+              {applicant.mandatoryDocuments.length > 0 ? (
+                applicant.mandatoryDocuments.map((document) => (
+                  <ApplicantDocumentRow
+                    key={document.id}
+                    document={document}
+                    onPress={() => handleViewDocument(document)}
+                  />
+                ))
+              ) : (
+                <Text style={styles.emptyDocumentsText}>
+                  Applicant has not uploaded mandatory documents yet.
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Uploaded Documents</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Uploaded Documents</Text>
+            <Text style={styles.verifyAllText}>Verify All</Text>
+          </View>
           <View style={styles.documentsList}>
-            {applicant.documents.map((document) => (
-              <ApplicantDocumentRow
-                key={document.id}
-                document={document}
-                onPress={() => handleViewDocument(document)}
-              />
-            ))}
+            {applicant.otherDocuments.length > 0 ? (
+              applicant.otherDocuments.map((document) => (
+                <ApplicantDocumentRow
+                  key={document.id}
+                  document={document}
+                  onPress={() => handleViewDocument(document)}
+                />
+              ))
+            ) : (
+              <Text style={styles.emptyDocumentsText}>
+                No program-specific documents uploaded for this application.
+              </Text>
+            )}
           </View>
         </View>
 
@@ -206,6 +299,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: AuthColors.profileBrand,
   },
+  loadingText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14,
+    color: '#767586',
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -242,14 +340,32 @@ const styles = StyleSheet.create({
   section: {
     gap: 16,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   sectionTitle: {
     fontFamily: FontFamily.regular,
     fontSize: 16,
     lineHeight: 24,
     color: AuthColors.textPrimary,
   },
+  verifyAllText: {
+    fontFamily: FontFamily.semiBold,
+    fontSize: 14,
+    lineHeight: 20,
+    letterSpacing: 0.14,
+    color: AuthColors.profileBrand,
+  },
   documentsList: {
     gap: 16,
+  },
+  emptyDocumentsText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#767586',
   },
   decisionBanner: {
     backgroundColor: 'rgba(96, 99, 238, 0.08)',

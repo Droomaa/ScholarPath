@@ -20,11 +20,6 @@ export function ApplicantDetailHero({ applicant }: ApplicantDetailHeroProps) {
             <Text style={styles.avatarInitial}>{applicant.name.charAt(0)}</Text>
           </View>
         )}
-        {applicant.topPercentBadge ? (
-          <View style={styles.topBadge}>
-            <Text style={styles.topBadgeText}>{applicant.topPercentBadge}</Text>
-          </View>
-        ) : null}
       </View>
 
       <Text style={styles.name}>{applicant.name}</Text>
@@ -34,11 +29,6 @@ export function ApplicantDetailHero({ applicant }: ApplicantDetailHeroProps) {
         <View style={styles.trackTag}>
           <Text style={styles.trackTagText}>{applicant.trackLabel}</Text>
         </View>
-        {applicant.rankLabel ? (
-          <View style={styles.rankTag}>
-            <Text style={styles.rankTagText}>{applicant.rankLabel}</Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -84,25 +74,6 @@ const styles = StyleSheet.create({
     fontSize: 36,
     color: AuthColors.profileBrand,
   },
-  topBadge: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: '#4648D4',
-    borderWidth: 2,
-    borderColor: '#FCF8FF',
-    borderRadius: 9999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  topBadgeText: {
-    fontFamily: FontFamily.bold,
-    fontSize: 10,
-    lineHeight: 15,
-    letterSpacing: 0.5,
-    color: AuthColors.white,
-    textTransform: 'uppercase',
-  },
   name: {
     fontFamily: FontFamily.bold,
     fontSize: 24,
@@ -137,20 +108,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     letterSpacing: 0.14,
     color: '#6063EE',
-  },
-  rankTag: {
-    backgroundColor: 'rgba(114, 117, 119, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(114, 117, 119, 0.2)',
-    borderRadius: 9999,
-    paddingHorizontal: 13,
-    paddingVertical: 5,
-  },
-  rankTagText: {
-    fontFamily: FontFamily.semiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.14,
-    color: '#595C5E',
   },
 });

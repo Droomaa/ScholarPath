@@ -5,12 +5,6 @@ export const DEFAULT_MOTIVATION_QUESTION =
 
 export const BEASISWA_REQUIRED_DOCUMENTS: ProgramDocumentRequirement[] = [
   {
-    id: 'resume',
-    title: 'Student Resume',
-    description: 'Achievements, activities, and skills',
-    icon: 'document',
-  },
-  {
     id: 'report-card',
     title: 'School Report Card',
     description: 'Latest semester report card',
