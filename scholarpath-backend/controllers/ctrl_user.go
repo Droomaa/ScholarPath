@@ -48,6 +48,7 @@ func UpdateProfile(c *gin.Context) {
 		Name      string `json:"name"`
 		JenjangID *uint  `json:"jenjang_id"`
 		Keahlian  string `json:"keahlian"`
+		Theme     string `json:"theme"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -63,6 +64,11 @@ func UpdateProfile(c *gin.Context) {
 	}
 	if input.Keahlian != "" {
 		user.Keahlian = input.Keahlian
+	}
+
+	if input.Theme != "" {
+		pref := models.UserPreference{UserID: userID, Theme: input.Theme}
+		koneksi.SQLiteDB.Save(&pref)
 	}
 
 	koneksi.DB.Save(&user)
@@ -97,5 +103,26 @@ func GetMyProfile(c *gin.Context) {
 		return
 	}
 	
-	c.JSON(http.StatusOK, gin.H{"data": user})
+	// Fetch theme from SQLite
+	var pref models.UserPreference
+	theme := "light"
+	if err := koneksi.SQLiteDB.First(&pref, userID).Error; err == nil {
+		if pref.Theme != "" {
+			theme = pref.Theme
+		}
+	}
+
+	// Create a combined map
+	responseData := map[string]interface{}{
+		"id":                user.ID,
+		"name":              user.Name,
+		"email":             user.Email,
+		"role":              user.Role,
+		"jenjang_id":        user.JenjangID,
+		"keahlian":          user.Keahlian,
+		"email_verified_at": user.EmailVerifiedAt,
+		"theme":             theme,
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"data": responseData})
 }

@@ -4,19 +4,36 @@ import { Head } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
-const logs = ref([
-    { timestamp: '2023-10-25 14:32:01', level: 'CRITICAL', actor: 'SYSTEM-DB-01', category: 'System', message: 'Database connection pool exhausted. Automatic failover initiated.' },
-    { timestamp: '2023-10-25 14:30:15', level: 'ERROR', actor: 'Admin_JD_99', category: 'Security', message: 'Failed login attempt from unauthorized IP: 192.168.1.189' },
-    { timestamp: '2023-10-25 14:28:44', level: 'WARNING', actor: 'ScholarBot_V2', category: 'Content', message: "Duplicate scholarship entry detected: 'STEM Excellence Grant' matches existing database items by 92%." },
-    { timestamp: '2023-10-25 14:25:20', level: 'INFO', actor: 'Admin_AR_01', category: 'Authentication', message: 'Super Admin session started successfully.' },
-    { timestamp: '2023-10-25 14:22:11', level: 'INFO', actor: 'System_Cron', category: 'System', message: 'Nightly backup synchronization completed. (3.4 GB synchronized)' },
-    { timestamp: '2023-10-25 14:15:58', level: 'WARNING', actor: 'Auth_Service', category: 'Authentication', message: 'Unusually high frequency of password reset requests from subnet 10.0.4.x.' }
+const today = new Date().toISOString().split('T')[0];
+const rawLogs = ref([
+    { timestamp: today + ' 08:12:05', level: 'INFO', actor: 'Budi Santoso', category: 'Program-Management', message: 'User Budi Santoso berhasil mendaftar ke Beasiswa Prestasi Utama.' },
+    { timestamp: today + ' 08:15:30', level: 'INFO', actor: 'Tech Academy', category: 'Auth', message: 'Instansi Tech Academy mengunggah berkas legalitas SK Izin Operasional.' },
+    { timestamp: today + ' 08:45:11', level: 'ERROR', actor: 'System', category: 'Database', message: 'ERROR: Gagal menulis log ke tabel pendaftaran karena deadlock.' },
+    { timestamp: today + ' 09:02:15', level: 'WARNING', actor: 'System', category: 'Auth', message: 'WARNING: Percobaan login gagal terdeteksi pada akun admin dari IP 192.168.1.45.' },
+    { timestamp: today + ' 09:12:22', level: 'CRITICAL', actor: 'System', category: 'AI-Service', message: 'CRITICAL: Koneksi ke Python AI Port 8001 sempat mengalami timeout (504).' },
+    { timestamp: today + ' 09:30:00', level: 'INFO', actor: 'Siti Aminah', category: 'Program-Management', message: 'User Siti Aminah berhasil mengubah profil data diri.' },
+    { timestamp: today + ' 09:45:12', level: 'INFO', actor: 'System', category: 'Auth', message: 'Token JWT untuk session instansi Tech Academy diperbarui.' },
+    { timestamp: today + ' 10:05:44', level: 'WARNING', actor: 'Agus Salim', category: 'Program-Management', message: 'WARNING: Percobaan akses ke endpoint instansi oleh akun siswa ditolak (403).' },
+    { timestamp: today + ' 10:15:33', level: 'ERROR', actor: 'System', category: 'Database', message: 'Koneksi ke database utama mengalami latensi tinggi > 2000ms.' },
+    { timestamp: today + ' 10:35:10', level: 'INFO', actor: 'Bina Nusantara', category: 'Program-Management', message: 'Instansi Bina Nusantara mempublikasikan program Olimpiade Sains Baru.' },
+    { timestamp: today + ' 11:00:05', level: 'INFO', actor: 'System', category: 'AI-Service', message: 'AI-Service berhasil memverifikasi 120 dokumen aplikasi beasiswa.' },
+    { timestamp: today + ' 11:25:50', level: 'WARNING', actor: 'System', category: 'Auth', message: 'Beberapa request ke API tanpa Header Authorization terdeteksi.' },
+    { timestamp: today + ' 11:40:22', level: 'INFO', actor: 'Admin', category: 'Program-Management', message: 'Admin menyetujui program beasiswa dari Tech Academy.' },
+    { timestamp: today + ' 12:05:15', level: 'CRITICAL', actor: 'System', category: 'Auth', message: 'CRITICAL: Kegagalan otentikasi masif terdeteksi pada endpoint login.' },
+    { timestamp: today + ' 12:30:45', level: 'INFO', actor: 'Joko Widodo', category: 'Auth', message: 'User Joko Widodo berhasil logout dari sistem.' },
 ]);
 
 const liveFeed = ref(true);
+const dateRange = ref(today + ' - Today');
 const searchQuery = ref('');
 const selectedLevel = ref('All Levels');
 const selectedCategory = ref('All Categories');
+
+// Variables for holding applied filters
+const appliedSearchQuery = ref('');
+const appliedLevel = ref('All Levels');
+const appliedCategory = ref('All Categories');
+
 const messageToast = ref({ text: '', type: '' });
 
 // AI Diagnostic Check State
@@ -29,36 +46,68 @@ const showToast = (text, type = 'success') => {
     }, 4000);
 };
 
-// Filter logic
+// Apply filter explicitly when button is clicked
+const applyFilters = () => {
+    appliedSearchQuery.value = searchQuery.value;
+    appliedLevel.value = selectedLevel.value;
+    appliedCategory.value = selectedCategory.value;
+    currentPage.value = 1; // Reset pagination on new filter
+    showToast('Filter log berhasil diterapkan!', 'success');
+};
+
+// Filter logic based on applied variables
 const filteredLogs = computed(() => {
-    return logs.value.filter(log => {
+    return rawLogs.value.filter(log => {
         // 1. Level Filter
-        if (selectedLevel.value !== 'All Levels') {
+        if (appliedLevel.value !== 'All Levels') {
             const levelMap = {
                 'Critical': 'CRITICAL',
                 'Error': 'ERROR',
                 'Warning': 'WARNING',
                 'Info': 'INFO'
             };
-            if (log.level !== levelMap[selectedLevel.value]) return false;
+            if (log.level !== levelMap[appliedLevel.value]) return false;
         }
 
         // 2. Category Filter
-        if (selectedCategory.value !== 'All Categories' && log.category !== selectedCategory.value) {
+        if (appliedCategory.value !== 'All Categories' && log.category !== appliedCategory.value) {
             return false;
         }
 
         // 3. Search Query
-        if (searchQuery.value.trim() !== '') {
-            const query = searchQuery.value.toLowerCase();
+        if (appliedSearchQuery.value.trim() !== '') {
+            const query = appliedSearchQuery.value.toLowerCase();
             const actorMatch = log.actor.toLowerCase().includes(query);
             const messageMatch = log.message.toLowerCase().includes(query);
-            const categoryMatch = log.category.toLowerCase().includes(query);
-            return actorMatch || messageMatch || categoryMatch;
+            return actorMatch || messageMatch;
         }
 
         return true;
     });
+});
+
+// Pagination Logic
+const currentPage = ref(1);
+const itemsPerPage = 5;
+
+const totalPages = computed(() => Math.ceil(filteredLogs.value.length / itemsPerPage) || 1);
+
+const paginatedLogs = computed(() => {
+    const start = (currentPage.value - 1) * itemsPerPage;
+    return filteredLogs.value.slice(start, start + itemsPerPage);
+});
+
+const prevPage = () => {
+    if (currentPage.value > 1) currentPage.value--;
+};
+
+const nextPage = () => {
+    if (currentPage.value < totalPages.value) currentPage.value++;
+};
+
+// Feature: Critical effect check
+const hasCriticalEventInView = computed(() => {
+    return paginatedLogs.value.some(log => log.level === 'CRITICAL' || log.level === 'ERROR');
 });
 
 // Run AI ScholarBot Diagnostic Check
@@ -79,30 +128,18 @@ const runAIDiagnostic = async () => {
         const timestampStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
 
         // Insert new diagnostic log into the list
-        logs.value.unshift({
+        rawLogs.value.unshift({
             timestamp: timestampStr,
             level: 'INFO',
             actor: 'ScholarBot_V2',
-            category: 'Content',
+            category: 'AI-Service',
             message: `AI diagnostic check completed. Matching score computed: ${score}%. System similarity index verified stable.`
         });
 
         showToast('Diagnostik AI ScholarBot V2 selesai, entri log terdaftar!', 'success');
     } catch (e) {
         console.error('FastAPI diagnostics offline. Running local semantic validation...', e);
-        // Fallback simulated AI log row
-        setTimeout(() => {
-            const now = new Date();
-            const timestampStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-            logs.value.unshift({
-                timestamp: timestampStr,
-                level: 'INFO',
-                actor: 'ScholarBot_V2',
-                category: 'Content',
-                message: 'AI semantic audit completed (local fallback). Similarity checking active. All GORM content matches verified.'
-            });
-            showToast('Audit log diagnostik AI selesai (simulasi)!', 'success');
-        }, 1200);
+        showToast('Gagal menjalankan diagnostik ScholarBot V2.', 'error');
     } finally {
         setTimeout(() => {
             isRunningDiagnostic.value = false;
@@ -197,9 +234,8 @@ const exportCSV = () => {
                             </span>
                             <input
                                 type="text"
-                                value="Oct 24 - Oct 25, 2023"
-                                disabled
-                                class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-600 font-bold"
+                                v-model="dateRange"
+                                class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-purple-500 rounded-xl text-xs text-slate-600 font-bold outline-none transition"
                             />
                         </div>
                     </div>
@@ -227,10 +263,10 @@ const exportCSV = () => {
                             class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-700 font-bold focus:bg-white focus:border-purple-500 transition outline-none cursor-pointer"
                         >
                             <option>All Categories</option>
-                            <option>System</option>
-                            <option>Security</option>
-                            <option>Content</option>
-                            <option>Authentication</option>
+                            <option>Auth</option>
+                            <option>Database</option>
+                            <option>AI-Service</option>
+                            <option>Program-Management</option>
                         </select>
                     </div>
                 </div>
@@ -260,6 +296,7 @@ const exportCSV = () => {
                         </button>
                         <button
                             type="button"
+                            @click="applyFilters"
                             class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
                         >
                             Apply Filters
@@ -282,7 +319,13 @@ const exportCSV = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
-                            <tr v-for="(l, idx) in filteredLogs" :key="idx" class="group hover:bg-slate-50/20 transition-colors duration-150">
+                            <!-- Empty State Placeholder -->
+                            <tr v-if="paginatedLogs.length === 0">
+                                <td colspan="5" class="py-12 text-center text-slate-400 font-bold text-sm">
+                                    Log tidak ditemukan.
+                                </td>
+                            </tr>
+                            <tr v-for="(l, idx) in paginatedLogs" :key="idx" class="group hover:bg-slate-50/20 transition-colors duration-150">
                                 <td class="py-4 text-xs font-bold text-slate-400">
                                     {{ l.timestamp.split(' ')[0] }}
                                     <span class="block text-[10px] font-semibold text-slate-400 mt-0.5">{{ l.timestamp.split(' ')[1] }}</span>
@@ -310,10 +353,10 @@ const exportCSV = () => {
                                 <td class="py-4">
                                     <span class="text-xs font-bold"
                                         :class="{
-                                            'text-purple-600': l.category === 'System',
-                                            'text-indigo-600': l.category === 'Security',
-                                            'text-blue-600': l.category === 'Content',
-                                            'text-emerald-600': l.category === 'Authentication'
+                                            'text-purple-600': l.category === 'Program-Management',
+                                            'text-indigo-600': l.category === 'Auth',
+                                            'text-blue-600': l.category === 'Database',
+                                            'text-emerald-600': l.category === 'AI-Service'
                                         }"
                                     >
                                         {{ l.category }}
@@ -327,13 +370,13 @@ const exportCSV = () => {
                     </table>
                 </div>
 
-                <!-- Simple Pagination UI -->
+                <!-- Pagination UI -->
                 <div class="pt-5 border-t border-slate-50 flex items-center justify-between text-xs font-bold text-slate-400">
-                    <span>Showing 1 to {{ filteredLogs.length }} of {{ filteredLogs.length }} entries</span>
+                    <span>Showing {{ paginatedLogs.length > 0 ? ((currentPage - 1) * itemsPerPage) + 1 : 0 }} to {{ ((currentPage - 1) * itemsPerPage) + paginatedLogs.length }} of {{ filteredLogs.length }} entries</span>
                     <div class="flex items-center gap-1">
-                        <button class="h-7 w-7 rounded-lg bg-slate-50 text-slate-500 flex items-center justify-center border border-slate-100 hover:bg-slate-100 transition cursor-pointer">&lt;</button>
-                        <button class="h-7 w-7 rounded-lg bg-purple-600 text-white flex items-center justify-center transition">1</button>
-                        <button class="h-7 w-7 rounded-lg bg-slate-50 text-slate-500 flex items-center justify-center border border-slate-100 hover:bg-slate-100 transition cursor-pointer">&gt;</button>
+                        <button type="button" @click="prevPage" :disabled="currentPage === 1" class="h-7 w-7 rounded-lg bg-slate-50 text-slate-500 flex items-center justify-center border border-slate-100 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">&lt;</button>
+                        <button type="button" class="h-7 w-7 rounded-lg bg-purple-600 text-white flex items-center justify-center transition">{{ currentPage }}</button>
+                        <button type="button" @click="nextPage" :disabled="currentPage === totalPages" class="h-7 w-7 rounded-lg bg-slate-50 text-slate-500 flex items-center justify-center border border-slate-100 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">&gt;</button>
                     </div>
                 </div>
             </div>
@@ -341,31 +384,35 @@ const exportCSV = () => {
             <!-- Bottom Stats Row Matrix -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- Critical Events -->
-                <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between">
+                <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between transition-all duration-300">
                     <div class="text-left space-y-1">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Critical Events (24h)</span>
+                        <span class="text-[9px] font-black uppercase tracking-wider transition-colors duration-300"
+                            :class="hasCriticalEventInView ? 'text-red-500 animate-pulse' : 'text-slate-400'">
+                            Critical Events (24h)
+                            <span v-if="hasCriticalEventInView" class="ml-1 px-1 bg-red-100 text-red-600 rounded">⚠</span>
+                        </span>
                         <div class="flex items-baseline gap-2">
-                            <p class="text-2xl font-black text-slate-800">12</p>
-                            <span class="text-[9px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100">+4% vs yesterday</span>
+                            <p class="text-2xl font-black transition-colors duration-300" :class="hasCriticalEventInView ? 'text-red-600' : 'text-slate-800'">12</p>
+                            <span class="text-[9px] font-bold bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100" :class="hasCriticalEventInView ? 'text-red-600 animate-pulse' : 'text-red-500'">+4% vs yesterday</span>
                         </div>
                     </div>
-                    <span class="h-9 w-9 bg-red-50 text-red-650 rounded-xl flex items-center justify-center font-bold text-lg">!</span>
+                    <span class="h-9 w-9 bg-red-50 text-red-650 rounded-xl flex items-center justify-center font-bold text-lg" :class="{'animate-bounce': hasCriticalEventInView}">!</span>
                 </div>
 
                 <!-- Security Threats -->
-                <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between">
+                <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between group hover:bg-red-500/10 transition duration-300 cursor-pointer">
                     <div class="text-left space-y-1">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Security Threats</span>
+                        <span class="text-[9px] font-black uppercase text-slate-400 group-hover:text-red-500 tracking-wider transition duration-300">Security Threats</span>
                         <div class="flex items-baseline gap-2">
-                            <p class="text-2xl font-black text-slate-800">3</p>
-                            <span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">-20% vs yesterday</span>
+                            <p class="text-2xl font-black text-slate-800 group-hover:text-red-700 transition duration-300">3</p>
+                            <span class="text-[9px] font-bold text-emerald-600 group-hover:text-red-600 bg-emerald-50 group-hover:bg-red-50 px-1.5 py-0.5 rounded-full border border-emerald-100 group-hover:border-red-200 transition duration-300">-20% vs yesterday</span>
                         </div>
                     </div>
-                    <span class="h-9 w-9 bg-indigo-50 text-indigo-650 rounded-xl flex items-center justify-center text-sm">🛡</span>
+                    <span class="h-9 w-9 bg-indigo-50 group-hover:bg-red-100 text-indigo-650 group-hover:text-red-600 rounded-xl flex items-center justify-center text-sm transition duration-300">🛡</span>
                 </div>
 
                 <!-- System Uptime -->
-                <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between">
+                <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between cursor-default">
                     <div class="text-left space-y-1">
                         <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">System Uptime</span>
                         <div class="flex items-baseline gap-2 mt-1">

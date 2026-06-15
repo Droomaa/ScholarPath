@@ -65,9 +65,36 @@ func VerifyOlimpiade(c *gin.Context) {
 		return
 	}
 
-	// Isi kolom VerifiedBy dengan ID Admin yang sedang login
+	var payload struct {
+		Status    string `json:"status"`
+		IsVisible bool   `json:"is_visible"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	olimpiade.VerifiedBy = &adminID
+	olimpiade.Status = payload.Status
+	olimpiade.IsVisible = payload.IsVisible
 	koneksi.DB.Save(&olimpiade)
+
+	// Send Notification
+	if olimpiade.InstansiID != nil {
+		var instansi models.Instansi
+		if err := koneksi.DB.First(&instansi, *olimpiade.InstansiID).Error; err == nil && instansi.UserID != nil {
+			msg := "Selamat! Program " + olimpiade.Judul + " Anda telah lolos verifikasi dan resmi dipublikasikan."
+			if payload.Status == "rejected" {
+				msg = "Maaf, pengajuan program " + olimpiade.Judul + " Anda ditolak karena belum memenuhi kriteria. Silakan coba ajukan program baru."
+			}
+			notif := models.Notification{
+				UserID:  *instansi.UserID,
+				Title:   "Hasil Verifikasi Program",
+				Message: msg,
+			}
+			koneksi.DB.Create(&notif)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Olimpiade berhasil diverifikasi oleh Admin", "data": olimpiade})
 }
@@ -86,8 +113,36 @@ func VerifyBeasiswa(c *gin.Context) {
 		return
 	}
 
+	var payload struct {
+		Status    string `json:"status"`
+		IsVisible bool   `json:"is_visible"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	beasiswa.VerifiedBy = &adminID
+	beasiswa.Status = payload.Status
+	beasiswa.IsVisible = payload.IsVisible
 	koneksi.DB.Save(&beasiswa)
+
+	// Send Notification
+	if beasiswa.InstansiID != nil {
+		var instansi models.Instansi
+		if err := koneksi.DB.First(&instansi, *beasiswa.InstansiID).Error; err == nil && instansi.UserID != nil {
+			msg := "Selamat! Program " + beasiswa.Nama + " Anda telah lolos verifikasi dan resmi dipublikasikan."
+			if payload.Status == "rejected" {
+				msg = "Maaf, pengajuan program " + beasiswa.Nama + " Anda ditolak karena belum memenuhi kriteria. Silakan coba ajukan program baru."
+			}
+			notif := models.Notification{
+				UserID:  *instansi.UserID,
+				Title:   "Hasil Verifikasi Program",
+				Message: msg,
+			}
+			koneksi.DB.Create(&notif)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Beasiswa berhasil diverifikasi oleh Admin", "data": beasiswa})
 }

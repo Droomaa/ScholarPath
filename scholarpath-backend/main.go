@@ -15,6 +15,7 @@ func main() {
 	}
 
 	koneksi.KoneksiDatabase()
+	koneksi.KoneksiSQLite()
 	r := routes.SetupRouter()
 	r.Run(":8080")
 }

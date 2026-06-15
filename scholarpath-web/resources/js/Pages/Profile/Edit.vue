@@ -1,8 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
+import InputError from '@/Components/InputError.vue';
 
 const props = defineProps({
     mustVerifyEmail: Boolean,
@@ -98,16 +99,9 @@ const handleRemovePhoto = (role) => {
 const fullName = ref('');
 const emailAddress = ref('');
 const location = ref('');
-const currentInstitution = ref('Stanford University');
-const gpaVal = ref('3.8');
-
-const interests = ref(['Computer Science', 'Renewable Energy', 'Underrepresented Minorities']);
-const hardSkills = ref(['Python', 'Data Analysis', 'Public Speaking']);
-
-const newInterestInput = ref('');
-const showAddInterest = ref(false);
-const newSkillInput = ref('');
-const showAddSkill = ref(false);
+const currentInstitution = ref('');
+const gpaVal = ref('');
+const keahlian = ref('');
 
 const activeTabSection = ref('personal');
 const listJenjangs = ref([]);
@@ -119,9 +113,8 @@ const completenessScore = computed(() => {
     if (emailAddress.value) score += 20;
     if (location.value) score += 15;
     if (currentInstitution.value) score += 15;
-    if (gpaVal.value) score += 10;
-    if (interests.value.length > 0) score += 10;
-    if (hardSkills.value.length > 0) score += 10;
+    if (gpaVal.value) score += 15;
+    if (keahlian.value) score += 15;
     return score;
 });
 
@@ -136,23 +129,33 @@ const fetchStudentProfileDetails = async () => {
         
         if (resProfile.data && resProfile.data.data) {
             const u = resProfile.data.data;
-            fullName.value = u.name || '';
-            emailAddress.value = u.email || '';
-            selectedJenjangId.value = u.jenjang_id || 1;
-            
-            if (u.keahlian) {
-                const parts = u.keahlian.split(',').map(p => p.trim()).filter(p => p);
-                if (parts.length > 0) {
-                    interests.value = parts.slice(0, Math.ceil(parts.length / 2));
-                    hardSkills.value = parts.slice(Math.ceil(parts.length / 2));
-                }
-            }
+            if (u.name) fullName.value = u.name;
+            if (u.email) emailAddress.value = u.email;
+            if (u.jenjang_id) selectedJenjangId.value = u.jenjang_id;
+            if (u.keahlian) keahlian.value = u.keahlian;
         }
+
+        const savedInst = localStorage.getItem('user_institution');
+        if (savedInst) currentInstitution.value = savedInst;
+
+        const savedGpa = localStorage.getItem('user_gpa');
+        if (savedGpa) gpaVal.value = savedGpa;
 
         const resJenjang = await axios.get(`${backendUrl}/jenjang`, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        listJenjangs.value = resJenjang.data.data || [];
+        const allJenjangs = resJenjang.data.data || [];
+        listJenjangs.value = allJenjangs.filter(j => 
+            j.nama.toLowerCase().includes('smp') || 
+            j.nama.toLowerCase().includes('sma') ||
+            j.nama.toLowerCase().includes('sederajat')
+        );
+        if (listJenjangs.value.length === 0) {
+            listJenjangs.value = [
+                { id: 1, nama: 'SMA / Sederajat' },
+                { id: 2, nama: 'SMP / Sederajat' }
+            ];
+        }
     } catch (error) {
         console.error('Error loading student profile details:', error);
     }
@@ -164,12 +167,10 @@ const handleSaveStudentProfile = async () => {
     isLoading.value = true;
     try {
         const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        const combinedKeahlian = [...interests.value, ...hardSkills.value].join(', ');
-        
         const payload = {
             name: fullName.value,
             jenjang_id: selectedJenjangId.value,
-            keahlian: combinedKeahlian
+            keahlian: keahlian.value
         };
 
         const response = await axios.put(`${backendUrl}/user/profile`, payload, {
@@ -178,10 +179,9 @@ const handleSaveStudentProfile = async () => {
 
         if (response.data && response.data.data) {
             localStorage.setItem('auth_name', fullName.value);
-            localStorage.setItem('mock_location', location.value);
-            localStorage.setItem('mock_institution', currentInstitution.value);
-            localStorage.setItem('mock_gpa', gpaVal.value);
-            showToast('Profil berhasil disimpan dan diperbarui!');
+            localStorage.setItem('user_institution', currentInstitution.value);
+            localStorage.setItem('user_gpa', gpaVal.value);
+            showToast('Profil dan detail akademik berhasil disimpan!');
         }
     } catch (error) {
         console.error('Error saving student profile:', error);
@@ -209,14 +209,125 @@ const showAddMemberModal = ref(false);
 const newMemberName = ref('');
 const newMemberRole = ref('');
 
-// Password Form using Laravel Breeze controller
-const passwordForm = useForm({
-    current_password: '',
-    password: '',
-    password_confirmation: '',
+// Password Form — via API /api/user/change-password
+const currentPassword = ref('');
+const newPassword = ref('');
+const confirmNewPassword = ref('');
+const isChangingPassword = ref(false);
+const passwordError = ref('');
+
+const userInstansi = ref({ id: 0, name: '', email: '' });
+const instansiId = ref(null);
+const isVerified = ref(false);
+
+const namaInstansi = ref('');
+const alamatInstansi = ref('');
+const deskripsiInstansi = ref('');
+const emailResmiInstansi = ref('');
+const nomorTeleponInstansi = ref('');
+const websiteInstansi = ref('');
+const instagramInstansi = ref('');
+const linkedinInstansi = ref('');
+const isSavingInstansi = ref(false);
+
+const fetchProfileInstansi = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        
+        const resUser = await axios.get(`${backendUrl}/user/profile`, { headers: { Authorization: `Bearer ${token}` } });
+        userInstansi.value = resUser.data.data;
+
+        const resAllInstansi = await axios.get(`${backendUrl}/instansi`, { headers: { Authorization: `Bearer ${token}` } });
+        const matched = (resAllInstansi.data.data || []).find(i => i.user_id === userInstansi.value.id);
+        
+        if (matched) {
+            instansiId.value = matched.id;
+            namaInstansi.value = matched.nama || '';
+            alamatInstansi.value = matched.alamat || '';
+            isVerified.value = matched.is_verified || false;
+            
+            const kontakRaw = matched.kontak || '';
+            if (kontakRaw.startsWith('{')) {
+                try {
+                    const kontakObj = JSON.parse(kontakRaw);
+                    emailResmiInstansi.value = kontakObj.email || '';
+                    nomorTeleponInstansi.value = kontakObj.telepon || '';
+                    websiteInstansi.value = kontakObj.website || '';
+                    instagramInstansi.value = kontakObj.instagram || '';
+                    linkedinInstansi.value = kontakObj.linkedin || '';
+                    deskripsiInstansi.value = kontakObj.deskripsi || '';
+                } catch (jsonErr) {
+                    nomorTeleponInstansi.value = kontakRaw;
+                }
+            } else {
+                nomorTeleponInstansi.value = kontakRaw;
+                emailResmiInstansi.value = userInstansi.value.email || '';
+            }
+        } else {
+            namaInstansi.value = userInstansi.value.name;
+            emailResmiInstansi.value = userInstansi.value.email;
+        }
+    } catch (e) {
+        console.error('Failed to load instansi profile:', e);
+    }
+};
+
+const handleSaveProfileInstansi = async () => {
+    const token = getAuthToken();
+    if (!token) return;
+    if (!instansiId.value) {
+        showToast('Profil instansi tidak ditemukan.', 'error');
+        return;
+    }
+    
+    isSavingInstansi.value = true;
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        const kontakData = {
+            email: emailResmiInstansi.value,
+            telepon: nomorTeleponInstansi.value,
+            website: websiteInstansi.value,
+            instagram: instagramInstansi.value,
+            linkedin: linkedinInstansi.value,
+            deskripsi: deskripsiInstansi.value
+        };
+
+        const payload = {
+            nama: namaInstansi.value,
+            alamat: alamatInstansi.value,
+            kontak: JSON.stringify(kontakData)
+        };
+        
+        await axios.put(`${backendUrl}/instansi/${instansiId.value}`, payload, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        showToast('Profil Instansi berhasil diperbarui!');
+        fetchProfileInstansi();
+    } catch (e) {
+        console.error('Failed to update instansi profile:', e);
+        showToast('Gagal memperbarui profil instansi.', 'error');
+    } finally {
+        isSavingInstansi.value = false;
+    }
+};
+
+const profileCompletenessInstansi = computed(() => {
+    let score = 0;
+    if (namaInstansi.value) score += 15;
+    if (alamatInstansi.value) score += 15;
+    if (deskripsiInstansi.value) score += 20;
+    if (emailResmiInstansi.value) score += 10;
+    if (nomorTeleponInstansi.value) score += 10;
+    if (websiteInstansi.value) score += 10;
+    if (instagramInstansi.value) score += 10;
+    if (linkedinInstansi.value) score += 10;
+    return score;
 });
 
 const loadInstitutionSettings = () => {
+    fetchProfileInstansi();
     // 1. Get institution admin name & email
     const name = localStorage.getItem('auth_name') || 'Admin Utama';
     institutionName.value = name;
@@ -291,25 +402,55 @@ const handleDeleteMember = (memberId, memberName) => {
     showToast(`Berhasil menghapus ${memberName}.`, 'warning');
 };
 
-// Update password via Laravel Password Controller
-const handleUpdatePassword = () => {
-    errorBackend.value = '';
-    passwordForm.put(route('password.update'), {
-        preserveScroll: true,
-        onSuccess: () => {
-            passwordForm.reset();
-            showToast('Kata sandi berhasil diperbarui!');
-        },
-        onError: (errors) => {
-            if (errors.password) {
-                passwordForm.reset('password', 'password_confirmation');
-            }
-            if (errors.current_password) {
-                passwordForm.reset('current_password');
-            }
-            showToast('Gagal memperbarui kata sandi. Cek kredensial Anda.', 'error');
-        },
-    });
+// Update password via API /api/user/change-password
+const handleUpdatePassword = async () => {
+    passwordError.value = '';
+
+    // Frontend validation: new password must match confirmation
+    if (!currentPassword.value || !newPassword.value || !confirmNewPassword.value) {
+        passwordError.value = 'Semua field password harus diisi.';
+        showToast(passwordError.value, 'error');
+        return;
+    }
+
+    if (newPassword.value.length < 8) {
+        passwordError.value = 'Password baru minimal 8 karakter.';
+        showToast(passwordError.value, 'error');
+        return;
+    }
+
+    if (newPassword.value !== confirmNewPassword.value) {
+        passwordError.value = 'Konfirmasi password tidak cocok dengan password baru.';
+        showToast(passwordError.value, 'error');
+        return;
+    }
+
+    const token = getAuthToken();
+    if (!token) return;
+
+    isChangingPassword.value = true;
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        await axios.post(`${backendUrl}/user/change-password`, {
+            current_password: currentPassword.value,
+            new_password: newPassword.value
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        // Reset form on success
+        currentPassword.value = '';
+        newPassword.value = '';
+        confirmNewPassword.value = '';
+        passwordError.value = '';
+        showToast('Kata sandi berhasil diperbarui!');
+    } catch (error) {
+        const errMsg = error.response?.data?.error || error.response?.data?.message || 'Gagal memperbarui kata sandi. Cek kredensial Anda.';
+        passwordError.value = errMsg;
+        showToast(errMsg, 'error');
+    } finally {
+        isChangingPassword.value = false;
+    }
 };
 
 const errorBackend = ref('');
@@ -318,6 +459,16 @@ const errorBackend = ref('');
 const seatsUsed = computed(() => {
     return activeMembers.value.length + 1;
 });
+
+// Discard changes
+const handleDiscardChanges = () => {
+    if (userRole.value === 'instansi' || userRole.value === 'admin') {
+        loadInstitutionSettings();
+    } else {
+        fetchStudentProfileDetails();
+    }
+    showToast('Perubahan dibatalkan.', 'warning');
+};
 
 // General mount routing
 onMounted(() => {
@@ -337,13 +488,6 @@ onMounted(() => {
         loadInstitutionSettings();
     } else {
         fetchStudentProfileDetails();
-        
-        const loc = localStorage.getItem('mock_location');
-        const inst = localStorage.getItem('mock_institution');
-        const gpa = localStorage.getItem('mock_gpa');
-        if (loc) location.value = loc;
-        if (inst) currentInstitution.value = inst;
-        if (gpa) gpaVal.value = gpa;
     }
 });
 </script>
@@ -356,14 +500,14 @@ onMounted(() => {
         <transition name="toast">
             <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-xs font-bold transition-all duration-300 animate-slideDown"
                 :class="{
-                    'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success',
-                    'bg-amber-50 text-amber-800 border-amber-100': messageToast.type === 'warning',
-                    'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error'
+                    'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60': messageToast.type === 'success',
+                    'bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-400 border-amber-100 dark:border-amber-800/60': messageToast.type === 'warning',
+                    'bg-red-50 dark:bg-red-900/40 text-red-800 dark:text-red-400 border-red-100 dark:border-red-800/60': messageToast.type === 'error'
                 }"
             >
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
-                <span v-else-if="messageToast.type === 'warning'" class="h-5 w-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-[10px]">!</span>
-                <span v-else class="h-5 w-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px]">×</span>
+                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 dark:bg-emerald-600 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
+                <span v-else-if="messageToast.type === 'warning'" class="h-5 w-5 bg-amber-500 dark:bg-amber-600 text-white rounded-full flex items-center justify-center text-[10px]">!</span>
+                <span v-else class="h-5 w-5 bg-red-500 dark:bg-red-600 text-white rounded-full flex items-center justify-center text-[10px]">×</span>
                 {{ messageToast.text }}
             </div>
         </transition>
@@ -375,8 +519,8 @@ onMounted(() => {
             
             <!-- Page Header -->
             <div class="space-y-1">
-                <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Institution Settings</h1>
-                <p class="text-xs font-semibold text-slate-500">Manage your scholarship portal configuration, security, and team permissions.</p>
+                <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Institution Settings</h1>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Manage your scholarship portal configuration, security, and team permissions.</p>
             </div>
 
             <!-- Two-Column Settings Layout -->
@@ -386,20 +530,20 @@ onMounted(() => {
                 <div class="lg:col-span-8 space-y-6">
                     
                     <!-- Institution Profile Photo Card -->
-                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-5">
-                        <div class="border-b border-slate-50 pb-3">
-                            <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5">
+                        <div class="border-b border-slate-50 dark:border-slate-800/60 pb-3">
+                            <h3 class="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
                                 <span class="text-lg">🏢</span> Profil Instansi
                             </h3>
-                            <p class="text-[10px] text-slate-400 font-bold">Perbarui logo atau foto profil instansi Anda.</p>
+                            <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold">Perbarui logo atau foto profil instansi Anda.</p>
                         </div>
                         <div class="flex items-center gap-6">
-                            <div class="relative h-20 w-20 rounded-2xl overflow-hidden border border-slate-150 ring-4 ring-indigo-50 shrink-0">
+                            <div class="relative h-20 w-20 rounded-2xl overflow-hidden border border-slate-150 dark:border-slate-700 ring-4 ring-indigo-50 dark:ring-indigo-900/30 shrink-0">
                                 <img :src="institutionPhoto || '/images/avatar.png'" alt="Institution Profile Photo" class="h-full w-full object-cover" />
                             </div>
                             <div class="space-y-1.5">
-                                <h4 class="text-xs font-bold text-slate-800">Logo Instansi</h4>
-                                <p class="text-[10px] text-slate-400 font-bold leading-normal">Mendukung format JPG, PNG, atau WEBP. Maks 2MB.</p>
+                                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200">Logo Instansi</h4>
+                                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold leading-normal">Mendukung format JPG, PNG, atau WEBP. Maks 2MB.</p>
                                 <div class="flex items-center gap-2">
                                     <input
                                         type="file"
@@ -419,7 +563,7 @@ onMounted(() => {
                                         v-if="institutionPhoto"
                                         type="button"
                                         @click="handleRemovePhoto('instansi')"
-                                        class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg transition cursor-pointer"
+                                        class="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-lg transition cursor-pointer"
                                     >
                                         Hapus
                                     </button>
@@ -429,13 +573,13 @@ onMounted(() => {
                     </div>
 
                     <!-- Team Management Section -->
-                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-5">
-                        <div class="flex items-center justify-between border-b border-slate-50 pb-3">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5">
+                        <div class="flex items-center justify-between border-b border-slate-50 dark:border-slate-800/60 pb-3">
                             <div class="space-y-0.5">
-                                <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                                <h3 class="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
                                     <span class="text-lg">👥</span> Team Management
                                 </h3>
-                                <p class="text-[10px] text-slate-400 font-bold">Invite and manage secondary administrators for your institution.</p>
+                                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold">Invite and manage secondary administrators for your institution.</p>
                             </div>
                             <button
                                 type="button"
@@ -447,40 +591,40 @@ onMounted(() => {
                         </div>
 
                         <!-- Active Members List -->
-                        <div class="divide-y divide-slate-50">
+                        <div class="divide-y divide-slate-50 dark:divide-slate-800/60">
                             <!-- Main Admin (Static) -->
                             <div class="py-3.5 flex items-center justify-between">
                                 <div class="flex items-center gap-3">
-                                    <div class="h-9 w-9 rounded-full bg-indigo-50 flex items-center justify-center font-bold text-indigo-600">
+                                    <div class="h-9 w-9 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center font-bold text-indigo-600 dark:text-indigo-400">
                                         AU
                                     </div>
                                     <div>
-                                        <p class="text-xs font-bold text-slate-850">{{ institutionName }}</p>
-                                        <p class="text-[9px] font-bold text-slate-400">Main Administrator (Owner)</p>
+                                        <p class="text-xs font-bold text-slate-850 dark:text-slate-200">{{ institutionName }}</p>
+                                        <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500">Main Administrator (Owner)</p>
                                     </div>
                                 </div>
-                                <span class="px-2 py-0.5 rounded-full bg-indigo-55/10 border border-indigo-100 text-indigo-700 text-[8px] font-black uppercase tracking-wider">Owner</span>
+                                <span class="px-2 py-0.5 rounded-full bg-indigo-55/10 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400 text-[8px] font-black uppercase tracking-wider">Owner</span>
                             </div>
 
                             <!-- Invited Members -->
                             <div v-for="member in activeMembers" :key="member.id" class="py-3.5 flex items-center justify-between group">
                                 <div class="flex items-center gap-3">
-                                    <div class="h-9 w-9 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center font-bold text-slate-500">
+                                    <div class="h-9 w-9 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center font-bold text-slate-500 dark:text-slate-400">
                                         {{ member.name.split(' ').map(n => n[0]).slice(0,2).join('') }}
                                     </div>
                                     <div>
-                                        <p class="text-xs font-bold text-slate-850">{{ member.name }}</p>
-                                        <p class="text-[9px] font-bold text-slate-400">{{ member.role }}</p>
+                                        <p class="text-xs font-bold text-slate-850 dark:text-slate-200">{{ member.name }}</p>
+                                        <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500">{{ member.role }}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-3">
-                                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-black uppercase tracking-wide">Active</span>
+                                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50 text-[9px] font-black uppercase tracking-wide">Active</span>
                                     
                                     <!-- Delete Button -->
                                     <button
                                         type="button"
                                         @click="handleDeleteMember(member.id, member.name)"
-                                        class="h-8 w-8 inline-flex items-center justify-center rounded-xl bg-slate-50 border border-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-400 transition cursor-pointer"
+                                        class="h-8 w-8 inline-flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 text-slate-400 dark:text-slate-500 transition cursor-pointer"
                                         title="Remove Member"
                                     >
                                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -491,29 +635,29 @@ onMounted(() => {
                             </div>
 
                             <!-- Empty members list state -->
-                            <div v-if="activeMembers.length === 0" class="py-6 text-center text-slate-400 font-bold text-xs">
+                            <div v-if="activeMembers.length === 0" class="py-6 text-center text-slate-400 dark:text-slate-500 font-bold text-xs">
                                 Belum ada anggota tim tambahan. Undang anggota baru untuk membantu mengelola program.
                             </div>
                         </div>
                     </div>
 
                     <!-- Security Configuration Section -->
-                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-6">
-                        <div class="border-b border-slate-50 pb-3">
-                            <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
+                        <div class="border-b border-slate-50 dark:border-slate-800/60 pb-3">
+                            <h3 class="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
                                 <span class="text-lg">🛡️</span> Security Configuration
                             </h3>
                         </div>
 
                         <!-- 2FA Toggle -->
-                        <div class="flex items-center justify-between p-4 bg-slate-50/40 border border-slate-100 rounded-2xl">
+                        <div class="flex items-center justify-between p-4 bg-slate-50/40 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800 rounded-2xl">
                             <div class="flex gap-3.5 items-start">
-                                <div class="h-10 w-10 shrink-0 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-center text-lg">
+                                <div class="h-10 w-10 shrink-0 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800/50 rounded-xl flex items-center justify-center text-lg">
                                     🔒
                                 </div>
                                 <div class="space-y-0.5">
-                                    <h4 class="text-xs font-bold text-slate-800">Two-Factor Authentication</h4>
-                                    <p class="text-[10px] font-bold text-slate-400 leading-normal">Secure your account with a secondary verification code.</p>
+                                    <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200">Two-Factor Authentication</h4>
+                                    <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 leading-normal">Secure your account with a secondary verification code.</p>
                                 </div>
                             </div>
                             <!-- Switch button toggle -->
@@ -521,7 +665,7 @@ onMounted(() => {
                                 type="button"
                                 @click="twoFactorAuth = !twoFactorAuth; handleSaveToggles(); showToast(twoFactorAuth ? '2FA diaktifkan!' : '2FA dinonaktifkan.', 'warning')"
                                 class="w-11 h-6 shrink-0 rounded-full transition duration-200 outline-none flex items-center px-0.5 cursor-pointer"
-                                :class="twoFactorAuth ? 'bg-indigo-600' : 'bg-slate-200'"
+                                :class="twoFactorAuth ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'"
                             >
                                 <span class="w-5 h-5 rounded-full bg-white shadow transform duration-200"
                                     :class="twoFactorAuth ? 'translate-x-5' : 'translate-x-0'"
@@ -529,59 +673,69 @@ onMounted(() => {
                             </button>
                         </div>
 
-                        <!-- Password Update Form -->
-                        <div class="border-t border-slate-50 pt-5 space-y-4">
-                            <h4 class="text-xs font-bold text-slate-800">Change Administrator Password</h4>
-                            
+                        <!-- Password Update Form (via API /api/user/change-password) -->
+                        <div class="border-t border-slate-50 dark:border-slate-800/60 pt-5 space-y-4">
+                            <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200">Change Administrator Password</h4>
+
+                            <!-- Inline error display -->
+                            <div v-if="passwordError" class="px-4 py-2.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 rounded-xl text-xs font-bold text-red-700 dark:text-red-400">
+                                {{ passwordError }}
+                            </div>
+
                             <form @submit.prevent="handleUpdatePassword" class="space-y-4">
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <!-- Current Password -->
                                     <div>
-                                        <label class="text-[9px] font-black uppercase text-slate-400 block mb-1.5">Current Password</label>
+                                        <label class="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 block mb-1.5">Current Password</label>
                                         <input
                                             type="password"
-                                            v-model="passwordForm.current_password"
+                                            v-model="currentPassword"
                                             required
+                                            autocomplete="current-password"
                                             placeholder="••••••••"
-                                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 outline-none transition"
+                                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
                                         />
-                                        <InputError :message="passwordForm.errors.current_password" class="mt-1" />
                                     </div>
 
                                     <!-- New Password -->
                                     <div>
-                                        <label class="text-[9px] font-black uppercase text-slate-400 block mb-1.5">New Password</label>
+                                        <label class="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 block mb-1.5">New Password</label>
                                         <input
                                             type="password"
-                                            v-model="passwordForm.password"
+                                            v-model="newPassword"
                                             required
+                                            autocomplete="new-password"
                                             placeholder="Min. 8 karakter"
-                                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 outline-none transition"
+                                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
                                         />
-                                        <InputError :message="passwordForm.errors.password" class="mt-1" />
                                     </div>
 
-                                    <!-- Confirm Password -->
+                                    <!-- Confirm New Password -->
                                     <div>
-                                        <label class="text-[9px] font-black uppercase text-slate-400 block mb-1.5">Confirm New Password</label>
+                                        <label class="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 block mb-1.5">Confirm New Password</label>
                                         <input
                                             type="password"
-                                            v-model="passwordForm.password_confirmation"
+                                            v-model="confirmNewPassword"
                                             required
+                                            autocomplete="new-password"
                                             placeholder="••••••••"
-                                            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 outline-none transition"
+                                            class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
+                                            :class="confirmNewPassword && newPassword !== confirmNewPassword ? 'border-red-400 dark:border-red-600 focus:border-red-500' : ''"
                                         />
-                                        <InputError :message="passwordForm.errors.password_confirmation" class="mt-1" />
+                                        <!-- Live mismatch hint -->
+                                        <p v-if="confirmNewPassword && newPassword !== confirmNewPassword" class="mt-1 text-[9px] font-bold text-red-500 dark:text-red-400">
+                                            Password tidak cocok
+                                        </p>
                                     </div>
                                 </div>
 
                                 <div class="flex justify-end pt-2">
                                     <button
                                         type="submit"
-                                        :disabled="passwordForm.processing"
-                                        class="px-4 py-2 bg-white border border-indigo-600 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                                        :disabled="isChangingPassword"
+                                        class="px-4 py-2 bg-white dark:bg-slate-800 border border-indigo-600 dark:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
                                     >
-                                        Update Password
+                                        {{ isChangingPassword ? 'Memperbarui...' : 'Update Password' }}
                                     </button>
                                 </div>
                             </form>
@@ -592,9 +746,81 @@ onMounted(() => {
                 <!-- Right Column (Notifications Sidebar, Plan metrics) -->
                 <div class="lg:col-span-4 space-y-6">
                     
+                    <!-- Status Verifikasi Card -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Status Verifikasi</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide"
+                                :class="isVerified ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-800/50'"
+                            >
+                                {{ isVerified ? 'TERVERIFIKASI' : 'BELUM VERIFIKASI' }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
+                            {{ isVerified 
+                                ? 'Akun instansi Anda telah diverifikasi oleh tim ScholarPath. Semua program yang Anda publikasikan akan tampil dengan badge verifikasi.' 
+                                : 'Akun Anda sedang dalam proses verifikasi. Beberapa fitur mungkin dibatasi sebelum verifikasi dokumen selesai.' }}
+                        </p>
+                        <a href="#" class="inline-flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition">
+                            <span>📄 Dokumen Legalitas OK</span>
+                            <span class="text-[9px] text-slate-400 dark:text-slate-500 font-normal">(Terverifikasi)</span>
+                        </a>
+                    </div>
+
+                    <!-- Tampilan bagi Pelamar Preview Card -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                        <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Tampilan bagi Pelamar</h4>
+                        <div class="border border-slate-150 dark:border-slate-800/60 rounded-2xl p-4 space-y-3.5 shadow-sm bg-slate-50/20 dark:bg-slate-800/30">
+                            <div class="flex items-center gap-3">
+                                <div class="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 flex items-center justify-center text-lg">
+                                    🏢
+                                </div>
+                                <div>
+                                    <h5 class="text-xs font-extrabold text-slate-800 dark:text-slate-200 leading-snug">{{ namaInstansi || 'Nama Instansi Anda' }}</h5>
+                                    <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500">Institusi Terverifikasi</p>
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed line-clamp-2">
+                                {{ deskripsiInstansi || 'Deskripsi profil singkat instansi Anda akan ditampilkan di sini untuk menarik pelamar berkualitas.' }}
+                            </p>
+                            <div class="space-y-1">
+                                <div class="flex justify-between items-center text-[9px] font-black">
+                                    <span class="text-indigo-600 dark:text-indigo-400">{{ profileCompletenessInstansi }}% Kelengkapan Profil</span>
+                                </div>
+                                <div class="w-full bg-slate-150 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                                    <div class="bg-indigo-600 dark:bg-indigo-500 h-full transition-all duration-300" :style="{ width: profileCompletenessInstansi + '%' }"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Media Sosial Card -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                        <div class="flex items-center justify-between pb-1">
+                            <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Media Sosial</h4>
+                            <button type="button" @click="handleSaveProfileInstansi" :disabled="isSavingInstansi" class="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-[9px] font-bold rounded-lg shadow-sm transition cursor-pointer">Simpan</button>
+                        </div>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 block mb-1">Instagram URL</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[10px] font-black text-slate-400 dark:text-slate-500 pointer-events-none">IG</span>
+                                    <input type="text" v-model="instagramInstansi" placeholder="instagram.com/akun" class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none" />
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 block mb-1">LinkedIn URL</label>
+                                <div class="relative">
+                                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[10px] font-black text-slate-400 dark:text-slate-500 pointer-events-none">LN</span>
+                                    <input type="text" v-model="linkedinInstansi" placeholder="linkedin.com/company/nama" class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Notifications Settings Card -->
-                    <div class="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-5 text-left">
-                        <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 border-b border-slate-50 pb-2">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-5 text-left">
+                        <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5 border-b border-slate-50 dark:border-slate-800/60 pb-2">
                             <span>🔔</span> Notifications
                         </h4>
                         
@@ -602,14 +828,14 @@ onMounted(() => {
                             <!-- Email Notifications -->
                             <div class="flex items-center justify-between gap-3">
                                 <div>
-                                    <h5 class="text-xs font-bold text-slate-800 leading-snug">Email Notifications</h5>
-                                    <p class="text-[9px] font-semibold text-slate-400 mt-0.5">Daily digest of applicants</p>
+                                    <h5 class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-snug">Email Notifications</h5>
+                                    <p class="text-[9px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">Daily digest of applicants</p>
                                 </div>
                                 <button
                                     type="button"
                                     @click="emailNotifications = !emailNotifications; handleSaveToggles(); showToast(emailNotifications ? 'Notifikasi Email Aktif' : 'Notifikasi Email Nonaktif', 'warning')"
                                     class="w-9 h-5 shrink-0 rounded-full transition duration-200 outline-none flex items-center px-0.5 cursor-pointer"
-                                    :class="emailNotifications ? 'bg-indigo-600' : 'bg-slate-200'"
+                                    :class="emailNotifications ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'"
                                 >
                                     <span class="w-4 h-4 rounded-full bg-white shadow transform duration-200"
                                         :class="emailNotifications ? 'translate-x-4' : 'translate-x-0'"
@@ -620,14 +846,14 @@ onMounted(() => {
                             <!-- Push Notifications -->
                             <div class="flex items-center justify-between gap-3">
                                 <div>
-                                    <h5 class="text-xs font-bold text-slate-800 leading-snug">Push Notifications</h5>
-                                    <p class="text-[9px] font-semibold text-slate-400 mt-0.5">Alerts for urgent messages</p>
+                                    <h5 class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-snug">Push Notifications</h5>
+                                    <p class="text-[9px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">Alerts for urgent messages</p>
                                 </div>
                                 <button
                                     type="button"
                                     @click="pushNotifications = !pushNotifications; handleSaveToggles(); showToast(pushNotifications ? 'Push Notif Aktif' : 'Push Notif Nonaktif', 'warning')"
                                     class="w-9 h-5 shrink-0 rounded-full transition duration-200 outline-none flex items-center px-0.5 cursor-pointer"
-                                    :class="pushNotifications ? 'bg-indigo-600' : 'bg-slate-200'"
+                                    :class="pushNotifications ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'"
                                 >
                                     <span class="w-4 h-4 rounded-full bg-white shadow transform duration-200"
                                         :class="pushNotifications ? 'translate-x-4' : 'translate-x-0'"
@@ -638,14 +864,14 @@ onMounted(() => {
                             <!-- Deadline Reminders -->
                             <div class="flex items-center justify-between gap-3">
                                 <div>
-                                    <h5 class="text-xs font-bold text-slate-800 leading-snug">Deadline Reminders</h5>
-                                    <p class="text-[9px] font-semibold text-slate-400 mt-0.5">7-day advance warnings</p>
+                                    <h5 class="text-xs font-bold text-slate-800 dark:text-slate-200 leading-snug">Deadline Reminders</h5>
+                                    <p class="text-[9px] font-semibold text-slate-400 dark:text-slate-500 mt-0.5">7-day advance warnings</p>
                                 </div>
                                 <button
                                     type="button"
                                     @click="deadlineReminders = !deadlineReminders; handleSaveToggles(); showToast(deadlineReminders ? 'Pengingat Deadline Aktif' : 'Pengingat Deadline Nonaktif', 'warning')"
                                     class="w-9 h-5 shrink-0 rounded-full transition duration-200 outline-none flex items-center px-0.5 cursor-pointer"
-                                    :class="deadlineReminders ? 'bg-indigo-600' : 'bg-slate-200'"
+                                    :class="deadlineReminders ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'"
                                 >
                                     <span class="w-4 h-4 rounded-full bg-white shadow transform duration-200"
                                         :class="deadlineReminders ? 'translate-x-4' : 'translate-x-0'"
@@ -655,36 +881,7 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Institution Plan Card -->
-                    <div class="bg-indigo-600 text-white rounded-3xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between h-44 text-left">
-                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,#818cf8,transparent_55%)] opacity-60"></div>
-                        <div class="space-y-3.5 relative z-10">
-                            <div>
-                                <h4 class="text-[10px] font-black uppercase tracking-widest text-indigo-200">Institution Plan</h4>
-                                <h3 class="text-base font-extrabold leading-tight mt-0.5">ScholarPath Premium Enterprise</h3>
-                            </div>
-                            
-                            <!-- Seats progress bar -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-[9px] font-black text-indigo-200 uppercase">
-                                    <span>Team Seats Used</span>
-                                    <span>{{ seatsUsed }} / 10</span>
-                                </div>
-                                <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                                    <div class="bg-white h-full transition-all duration-300" :style="{ width: (seatsUsed * 10) + '%' }"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="relative z-10 pt-3">
-                            <button
-                                type="button"
-                                @click="showToast('Halaman Detail Penagihan sedang disiapkan.', 'warning')"
-                                class="w-full py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold rounded-lg border border-white/10 transition cursor-pointer"
-                            >
-                                View Billing Info
-                            </button>
-                        </div>
-                    </div>
+
                 </div>
             </div>
         </div>
@@ -694,7 +891,7 @@ onMounted(() => {
         <!-- ======================================================= -->
         <div v-else class="space-y-8 text-left">
             <div class="flex items-center justify-between">
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Profile Settings</h1>
+                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Profile Settings</h1>
             </div>
 
             <!-- Content Grid Layout -->
@@ -703,40 +900,39 @@ onMounted(() => {
                 <!-- Left Sidebar Section (AI card & Submenu navigation) -->
                 <div class="lg:col-span-4 space-y-6">
                     <!-- AI Optimization Card -->
-                    <div class="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm text-center space-y-4">
-                        <span class="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center justify-center gap-1.5">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm text-center space-y-4">
+                        <span class="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
                             <span>✨</span> AI Optimization
                         </span>
 
                         <!-- Circle completeness bar -->
                         <div class="relative h-28 w-28 mx-auto flex items-center justify-center">
                             <svg class="absolute inset-0 transform -rotate-90" viewBox="0 0 36 36">
-                                <path class="text-slate-100" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                                <path class="text-indigo-600 transition-all duration-500" stroke-dasharray="100" :stroke-dashoffset="100 - completenessScore" stroke-linecap="round" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="text-slate-100 dark:text-slate-800" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                <path class="text-indigo-600 dark:text-indigo-500 transition-all duration-500" stroke-dasharray="100" :stroke-dashoffset="100 - completenessScore" stroke-linecap="round" stroke-width="3.5" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                             </svg>
-                            <span class="text-2xl font-black text-slate-800">{{ completenessScore }}%</span>
+                            <span class="text-2xl font-black text-slate-800 dark:text-white">{{ completenessScore }}%</span>
                         </div>
 
-                        <p class="text-xs text-slate-500 font-bold leading-relaxed px-2">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-bold leading-relaxed px-2">
                             Add your Research Interests to reach 85% and unlock targeted scholarship matches.
                         </p>
 
                         <button
                             type="button"
-                            @click="activeTabSection = 'interests'; showToast('Silakan tambahkan bidang minat/keahlian riset Anda!');"
-                            class="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100/50 transition duration-200 cursor-pointer"
+                            @click="showToast('Data Profil berhasil dianalisis oleh sistem kami.')"
+                            class="w-full py-2.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-800/50 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 text-xs font-bold rounded-xl border border-indigo-100/50 dark:border-indigo-800/50 transition duration-200 cursor-pointer"
                         >
                             Boost Match Rate
                         </button>
                     </div>
 
                     <!-- Navigation Sub-menus -->
-                    <div class="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden p-3 space-y-1">
+                    <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden p-3 space-y-1">
                         <button
                             v-for="sub in [
                                 { id: 'personal', label: 'Personal Information', icon: '👤' },
                                 { id: 'academic', label: 'Academic Details', icon: '🎓' },
-                                { id: 'interests', label: 'Interests & Skills', icon: '💼' },
                                 { id: 'notifications', label: 'Notifications', icon: '🔔' }
                             ]"
                             :key="sub.id"
@@ -744,8 +940,8 @@ onMounted(() => {
                             @click="activeTabSection = sub.id"
                             class="w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl text-left text-xs font-bold transition duration-200 focus:outline-none"
                             :class="activeTabSection === sub.id 
-                                ? 'bg-indigo-50 text-indigo-600 border border-indigo-100/50' 
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'"
+                                ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-800/50' 
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200'"
                         >
                             <span>{{ sub.icon }}</span>
                             {{ sub.label }}
@@ -756,20 +952,20 @@ onMounted(() => {
                 <!-- Right Column: Settings Details -->
                 <div class="lg:col-span-8 space-y-6">
                     <!-- Card 1: Personal Information -->
-                    <div v-show="activeTabSection === 'personal'" class="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 animate-scale">
+                    <div v-show="activeTabSection === 'personal'" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 animate-scale">
                         <div class="space-y-1">
-                            <h3 class="text-lg font-black text-slate-800 tracking-tight">Personal Information</h3>
-                            <p class="text-xs text-slate-500">Update your basic details for scholarship applications.</p>
+                            <h3 class="text-lg font-black text-slate-800 dark:text-white tracking-tight">Personal Information</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Update your basic details for scholarship applications.</p>
                         </div>
 
                         <!-- Profile Photo Upload Section -->
-                        <div class="flex items-center gap-6 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
-                            <div class="relative h-20 w-20 rounded-2xl overflow-hidden border border-slate-150 ring-4 ring-indigo-50 shrink-0">
+                        <div class="flex items-center gap-6 p-4 bg-slate-50/50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                            <div class="relative h-20 w-20 rounded-2xl overflow-hidden border border-slate-150 dark:border-slate-700 ring-4 ring-indigo-50 dark:ring-indigo-900/30 shrink-0">
                                 <img :src="studentPhoto || '/images/avatar.png'" alt="Student Profile Photo" class="h-full w-full object-cover" />
                             </div>
                             <div class="space-y-1.5">
-                                <h4 class="text-xs font-bold text-slate-800">Foto Profil</h4>
-                                <p class="text-[10px] text-slate-400 font-bold leading-normal">Mendukung format JPG, PNG, atau WEBP. Maks 2MB.</p>
+                                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200">Foto Profil</h4>
+                                <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold leading-normal">Mendukung format JPG, PNG, atau WEBP. Maks 2MB.</p>
                                 <div class="flex items-center gap-2">
                                     <input
                                         type="file"
@@ -789,7 +985,7 @@ onMounted(() => {
                                         v-if="studentPhoto"
                                         type="button"
                                         @click="handleRemovePhoto('student')"
-                                        class="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg transition cursor-pointer"
+                                        class="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold rounded-lg transition cursor-pointer"
                                     >
                                         Hapus
                                     </button>
@@ -801,42 +997,42 @@ onMounted(() => {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                             <!-- Full Name -->
                             <div>
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Full Name</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">Full Name</label>
                                 <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 pointer-events-none">👤</span>
+                                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 dark:text-slate-500 pointer-events-none">👤</span>
                                     <input
                                         type="text"
                                         v-model="fullName"
                                         placeholder="Name"
-                                        class="w-full pl-10 pr-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white border border-slate-100 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                        class="w-full pl-10 pr-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-100 dark:border-slate-700 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                     />
                                 </div>
                             </div>
 
                             <!-- Email Address -->
                             <div>
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Email Address</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">Email Address</label>
                                 <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 pointer-events-none">✉</span>
+                                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 dark:text-slate-500 pointer-events-none">✉</span>
                                     <input
                                         type="email"
                                         v-model="emailAddress"
                                         placeholder="email@example.com"
-                                        class="w-full pl-10 pr-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white border border-slate-100 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                        class="w-full pl-10 pr-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-100 dark:border-slate-700 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                     />
                                 </div>
                             </div>
 
                             <!-- Location -->
                             <div class="md:col-span-2">
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Location</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">Location</label>
                                 <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 pointer-events-none">📍</span>
+                                    <span class="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 dark:text-slate-500 pointer-events-none">📍</span>
                                     <input
                                         type="text"
                                         v-model="location"
                                         placeholder="Palo Alto, CA"
-                                        class="w-full pl-10 pr-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white border border-slate-100 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                        class="w-full pl-10 pr-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-100 dark:border-slate-700 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                     />
                                 </div>
                             </div>
@@ -844,46 +1040,43 @@ onMounted(() => {
                     </div>
 
                     <!-- Card 2: Academic Details -->
-                    <div v-show="activeTabSection === 'academic'" class="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 animate-scale">
+                    <div v-show="activeTabSection === 'academic'" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 animate-scale">
                         <div class="space-y-1">
-                            <h3 class="text-lg font-black text-slate-800 tracking-tight">Academic Details</h3>
-                            <p class="text-xs text-slate-500">Verification of these details may be required for specific grants.</p>
+                            <h3 class="text-lg font-black text-slate-800 dark:text-white tracking-tight">Academic Details</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Verification of these details may be required for specific grants.</p>
                         </div>
 
                         <!-- Fields Grid -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                            <!-- Current Institution -->
+                            <!-- Asal Sekolah -->
                             <div>
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Current Institution</label>
-                                <select
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">Asal Sekolah</label>
+                                <input
+                                    type="text"
                                     v-model="currentInstitution"
-                                    class="w-full px-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white border border-slate-100 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 transition outline-none cursor-pointer"
-                                >
-                                    <option value="Stanford University">Stanford University</option>
-                                    <option value="Universitas Indonesia">Universitas Indonesia</option>
-                                    <option value="Institut Teknologi Bandung">Institut Teknologi Bandung</option>
-                                    <option value="Universitas Gadjah Mada">Universitas Gadjah Mada</option>
-                                    <option value="Harvard University">Harvard University</option>
-                                </select>
+                                    placeholder="Contoh: SMA Negeri 1 Jakarta"
+                                    class="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-100 dark:border-slate-700 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
+                                    required
+                                />
                             </div>
 
-                            <!-- GPA -->
+                            <!-- Nilai Rapor -->
                             <div>
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">GPA (4.0 Scale)</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">Nilai Rata-rata Rapor</label>
                                 <input
                                     type="text"
                                     v-model="gpaVal"
-                                    placeholder="3.8"
-                                    class="w-full px-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white border border-slate-100 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                    placeholder="Contoh: 85.5"
+                                    class="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-100 dark:border-slate-700 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                 />
                             </div>
 
                             <!-- Jenjang Pendidikan -->
                             <div class="md:col-span-2">
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Tingkat Pendidikan</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-2">Tingkat Pendidikan</label>
                                 <select
                                     v-model="selectedJenjangId"
-                                    class="w-full px-4 py-3 bg-slate-50/50 hover:bg-slate-50 focus:bg-white border border-slate-100 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 transition outline-none cursor-pointer"
+                                    class="w-full px-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-100 dark:border-slate-700 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none cursor-pointer"
                                 >
                                     <option v-for="jenjang in listJenjangs" :key="jenjang.id" :value="jenjang.id">
                                         {{ jenjang.nama }}
@@ -894,108 +1087,29 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Card 3: Interests & Skills -->
-                    <div v-show="activeTabSection === 'interests'" class="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 animate-scale">
-                        <div class="flex items-center justify-between border-b border-slate-50 pb-4">
-                            <div class="space-y-1">
-                                <h3 class="text-lg font-black text-slate-800 tracking-tight">Interests & Skills</h3>
-                                <p class="text-xs text-slate-500">Used by AI to match you with niche scholarships.</p>
-                            </div>
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100/50 text-[9px] font-black uppercase shrink-0">
-                                <span>✓</span> Verified
-                            </span>
-                        </div>
-
-                        <!-- Tag List Blocks -->
-                        <div class="space-y-6 pt-2">
-                            <!-- Scholarship Interests -->
-                            <div class="space-y-3">
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Scholarship Interests</label>
-                                <div class="flex flex-wrap gap-2 items-center">
-                                    <span v-for="(interest, index) in interests" :key="interest" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50/70 border border-indigo-100/50 text-indigo-700 text-xs font-bold animate-fadeIn">
-                                        {{ interest }}
-                                        <button type="button" @click="removeInterest(index)" class="text-indigo-400 hover:text-indigo-600 font-extrabold focus:outline-none">×</button>
-                                    </span>
-
-                                    <!-- Add Tag input inline -->
-                                    <div v-if="showAddInterest" class="flex items-center gap-1">
-                                        <input
-                                            type="text"
-                                            v-model="newInterestInput"
-                                            @keyup.enter="addInterest"
-                                            @blur="addInterest"
-                                            placeholder="Tulis minat..."
-                                            class="px-3 py-1 bg-white border border-indigo-200 rounded-full text-xs text-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-32 animate-fadeIn"
-                                            autofocus
-                                        />
-                                    </div>
-                                    <button
-                                        v-else
-                                        type="button"
-                                        @click="showAddInterest = true"
-                                        class="px-3 py-1.5 border border-dashed border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-700 rounded-full text-xs font-bold transition focus:outline-none"
-                                    >
-                                        + Add Tag
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Hard Skills -->
-                            <div class="space-y-3">
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Hard Skills</label>
-                                <div class="flex flex-wrap gap-2 items-center">
-                                    <span v-for="(skill, index) in hardSkills" :key="skill" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50/70 border border-purple-100/50 text-purple-700 text-xs font-bold animate-fadeIn">
-                                        {{ skill }}
-                                        <button type="button" @click="removeSkill(index)" class="text-purple-400 hover:text-purple-600 font-extrabold focus:outline-none">×</button>
-                                    </span>
-
-                                    <!-- Add Skill input inline -->
-                                    <div v-if="showAddSkill" class="flex items-center gap-1">
-                                        <input
-                                            type="text"
-                                            v-model="newSkillInput"
-                                            @keyup.enter="addSkill"
-                                            @blur="addSkill"
-                                            placeholder="Tulis keahlian..."
-                                            class="px-3 py-1 bg-white border border-purple-200 rounded-full text-xs text-purple-700 focus:outline-none focus:ring-1 focus:ring-purple-500 w-32 animate-fadeIn"
-                                            autofocus
-                                        />
-                                    </div>
-                                    <button
-                                        v-else
-                                        type="button"
-                                        @click="showAddSkill = true"
-                                        class="px-3 py-1.5 border border-dashed border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-700 rounded-full text-xs font-bold transition focus:outline-none"
-                                    >
-                                        + Add Skill
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Card 4: Notifications Settings -->
-                    <div v-show="activeTabSection === 'notifications'" class="bg-white border border-slate-100 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 animate-scale">
+                    <div v-show="activeTabSection === 'notifications'" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6 animate-scale">
                         <div class="space-y-1">
-                            <h3 class="text-lg font-black text-slate-800 tracking-tight">Notification Settings</h3>
-                            <p class="text-xs text-slate-500">Configure how you receive scholarship and matching alerts.</p>
+                            <h3 class="text-lg font-black text-slate-800 dark:text-white tracking-tight">Notification Settings</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Configure how you receive scholarship and matching alerts.</p>
                         </div>
 
                         <div class="space-y-4 pt-2">
-                            <div class="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                            <div class="flex items-center justify-between p-4 bg-slate-50/50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
                                 <div class="space-y-0.5">
-                                    <p class="text-xs font-bold text-slate-800">Email Matching Notifications</p>
-                                    <p class="text-[10px] font-bold text-slate-400 leading-normal">Receive alerts when new scholarship matches are found.</p>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Email Matching Notifications</p>
+                                    <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 leading-normal">Receive alerts when new scholarship matches are found.</p>
                                 </div>
-                                <input type="checkbox" checked class="h-4.5 w-4.5 text-indigo-600 focus:ring-indigo-500/20 border-gray-300 rounded-lg transition" />
+                                <input type="checkbox" checked class="h-4.5 w-4.5 text-indigo-600 focus:ring-indigo-500/20 border-gray-300 dark:border-slate-600 dark:bg-slate-700 rounded-lg transition" />
                             </div>
 
-                            <div class="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                            <div class="flex items-center justify-between p-4 bg-slate-50/50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
                                 <div class="space-y-0.5">
-                                    <p class="text-xs font-bold text-slate-800">Deadline Reminders</p>
-                                    <p class="text-[10px] font-bold text-slate-400 leading-normal">Receive warnings 7 days before program deadlines.</p>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200">Deadline Reminders</p>
+                                    <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 leading-normal">Receive warnings 7 days before program deadlines.</p>
                                 </div>
-                                <input type="checkbox" checked class="h-4.5 w-4.5 text-indigo-600 focus:ring-indigo-500/20 border-gray-300 rounded-lg transition" />
+                                <input type="checkbox" checked class="h-4.5 w-4.5 text-indigo-600 focus:ring-indigo-500/20 border-gray-300 dark:border-slate-600 dark:bg-slate-700 rounded-lg transition" />
                             </div>
                         </div>
                     </div>
@@ -1005,7 +1119,7 @@ onMounted(() => {
                         <button
                             type="button"
                             @click="handleDiscardChanges"
-                            class="px-6 py-3.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-bold rounded-2xl transition duration-200 cursor-pointer"
+                            class="px-6 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-2xl transition duration-200 cursor-pointer"
                         >
                             Discard Changes
                         </button>
@@ -1025,44 +1139,44 @@ onMounted(() => {
 
         <!-- UNDANG ANGGOTA TIM MODAL (INSTANSI ONLY) -->
         <transition name="fade">
-            <div v-if="showAddMemberModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <div v-if="showAddMemberModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-slate-950/80 backdrop-blur-sm">
                 <div class="absolute inset-0" @click="showAddMemberModal = false"></div>
-                <div class="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-sm w-full relative z-10 animate-scale text-left">
+                <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl p-6 md:p-8 max-w-sm w-full relative z-10 animate-scale text-left">
                     <div class="flex justify-between items-center mb-5">
-                        <h3 class="text-base font-extrabold text-slate-850">Undang Anggota Tim</h3>
-                        <button type="button" @click="showAddMemberModal = false" class="text-slate-400 hover:text-slate-650 text-xl font-bold">&times;</button>
+                        <h3 class="text-base font-extrabold text-slate-850 dark:text-white">Undang Anggota Tim</h3>
+                        <button type="button" @click="showAddMemberModal = false" class="text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-300 text-xl font-bold">&times;</button>
                     </div>
                     
                     <div class="space-y-4">
                         <!-- Member Name -->
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Nama Lengkap</label>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Nama Lengkap</label>
                             <input
                                 type="text"
                                 v-model="newMemberName"
                                 placeholder="Contoh: Dr. Robert Chen"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 outline-none transition"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
                             />
                         </div>
 
                         <!-- Member Role -->
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Jabatan / Posisi</label>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Jabatan / Posisi</label>
                             <input
                                 type="text"
                                 v-model="newMemberRole"
                                 placeholder="Contoh: Lead Scholarship Officer"
-                                class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 outline-none transition"
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 outline-none transition"
                             />
                         </div>
                     </div>
 
                     <!-- Modal Actions -->
-                    <div class="flex gap-3 pt-5 mt-5 border-t border-slate-100">
+                    <div class="flex gap-3 pt-5 mt-5 border-t border-slate-100 dark:border-slate-800">
                         <button
                             type="button"
                             @click="showAddMemberModal = false"
-                            class="w-1/2 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                            class="w-1/2 py-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
                         >
                             Batal
                         </button>

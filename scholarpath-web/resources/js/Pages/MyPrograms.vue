@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import RegistrationModal from '@/Components/RegistrationModal.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
@@ -18,6 +19,9 @@ const itemsPerPage = 5;
 
 // Selected program detail modal
 const selectedProgram = ref(null);
+const showRegistrationModal = ref(false);
+const registrationProgram = ref(null);
+const existingRegistration = ref(null);
 
 const showToast = (text, type = 'success') => {
     messageToast.value = { text, type };
@@ -34,53 +38,79 @@ const fetchData = async () => {
     const token = getAuthToken();
     if (!token) return;
     isLoadingData.value = true;
-    try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        
-        // Fetch pendaftaran & wishlist
-        const [resPendaftaran, resWishlist] = await Promise.all([
-            axios.get(`${backendUrl}/user/pendaftaran`, { headers: { Authorization: `Bearer ${token}` } }),
-            axios.get(`${backendUrl}/user/wishlist`, { headers: { Authorization: `Bearer ${token}` } })
-        ]);
+    const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
 
+    // Fetch pendaftaran (riwayat) - only works for student role
+    try {
+        const resPendaftaran = await axios.get(`${backendUrl}/user/pendaftaran`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
         userPendaftarans.value = resPendaftaran.data.data || [];
+    } catch (error) {
+        console.warn('Pendaftaran data not available (may be non-student role):', error?.response?.status);
+        userPendaftarans.value = [];
+    }
+
+    // Fetch wishlist - separate try/catch so it doesn't fail together
+    try {
+        const resWishlist = await axios.get(`${backendUrl}/user/wishlist`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
         userWishlist.value = resWishlist.data.data || [];
     } catch (error) {
-        console.error('Error fetching programs data:', error);
-        showToast('Gagal memuat beberapa data dari backend.', 'error');
-    } finally {
-        isLoadingData.value = false;
+        console.warn('Wishlist data not available:', error?.response?.status);
+        userWishlist.value = [];
     }
+
+    isLoadingData.value = false;
 };
 
 // Calculate stats count
 const stats = computed(() => {
-    const savedCount = userWishlist.value.length || 24; // Fallback to mockup value if empty
-    const appliedCount = userPendaftarans.value.length || 8; // Fallback to mockup
+    const savedCount = userWishlist.value.length;
+    const appliedCount = userPendaftarans.value.length;
     
-    // Count interview status
-    const interviewCount = userPendaftarans.value.filter(
-        p => p.status_name?.toLowerCase() === 'interview' || p.status_name?.toLowerCase() === 'wawancara'
-    ).length || 3;
+    // Count pending status
+    const pendingCount = userPendaftarans.value.filter(
+        p => p.status_name?.toLowerCase() === 'pending'
+    ).length;
 
     const resultCount = userPendaftarans.value.filter(
-        p => ['lulus', 'diterima', 'ditolak', 'selesai'].includes(p.status_name?.toLowerCase())
-    ).length || 2;
+        p => ['accepted', 'rejected'].includes(p.status_name?.toLowerCase())
+    ).length;
 
     return {
         saved: savedCount,
         applied: appliedCount,
-        interviews: interviewCount,
+        interviews: pendingCount,
         results: resultCount
     };
 });
 
 // Combined applied and wishlisted list for table tracking
+const calculateDeadline = (deadlineStr) => {
+    if (!deadlineStr) return { date: 'TBA', days: '-' };
+    const dlDate = new Date(deadlineStr);
+    const now = new Date();
+    const diffTime = dlDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    const formattedDate = dlDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    let daysStr = '';
+    if (diffDays > 0) daysStr = `${diffDays} Hari Tersisa`;
+    else if (diffDays === 0) daysStr = 'Hari Ini Terakhir';
+    else daysStr = 'Telah Berakhir';
+    
+    return { date: formattedDate, days: daysStr };
+};
+
 const trackingList = computed(() => {
     const list = [];
     
     // Add applied items
     userPendaftarans.value.forEach(p => {
+        const rawDeadline = p.program_deadline || p.beasiswa?.deadline || p.olimpiade?.deadline || null;
+        const { date, days } = calculateDeadline(rawDeadline);
         list.push({
             id: p.pendaftaran_id,
             rawId: p.pendaftaran_id,
@@ -88,14 +118,16 @@ const trackingList = computed(() => {
             type: p.program_type || 'Beasiswa',
             source: 'applied',
             status: p.status_name || 'Applied',
-            deadline: '15 Oct 2024',
-            daysLeft: '12 Days Left',
+            deadline: date,
+            daysLeft: days,
             date: p.tanggal_daftar
         });
     });
 
     // Add wishlisted items
     userWishlist.value.forEach(w => {
+        const rawDeadline = w.program_deadline || w.beasiswa?.deadline || w.olimpiade?.deadline || null;
+        const { date, days } = calculateDeadline(rawDeadline);
         list.push({
             id: `w-${w.wishlist_id}`,
             rawId: w.wishlist_id,
@@ -103,44 +135,11 @@ const trackingList = computed(() => {
             type: w.program_type || 'Beasiswa',
             source: 'saved',
             status: 'Saved',
-            deadline: '12 Dec 2024',
-            daysLeft: '69 Days Left',
+            deadline: date,
+            daysLeft: days,
             date: new Date()
         });
     });
-
-    // Fallback Mockup Data if no entries exist
-    if (list.length === 0) {
-        return [
-            {
-                id: 'mock-1',
-                title: 'Global Future Leaders 2024',
-                type: 'Beasiswa',
-                status: 'Interview',
-                deadline: '15 Oct 2024',
-                daysLeft: '12 Days Left',
-                source: 'applied'
-            },
-            {
-                id: 'mock-2',
-                title: 'STEM Innovation Challenge',
-                type: 'Lomba',
-                status: 'Applied',
-                deadline: '01 Nov 2024',
-                daysLeft: '28 Days Left',
-                source: 'applied'
-            },
-            {
-                id: 'mock-3',
-                title: 'National Art Scholarship',
-                type: 'Beasiswa',
-                status: 'Saved',
-                deadline: '12 Dec 2024',
-                daysLeft: '69 Days Left',
-                source: 'saved'
-            }
-        ];
-    }
 
     return list;
 });
@@ -175,7 +174,6 @@ const totalPages = computed(() => {
     return Math.ceil(filteredTrackings.value.length / itemsPerPage) || 1;
 });
 
-// Action: Cancel or delete application/saved
 const handleDeleteItem = async (item) => {
     const token = getAuthToken();
     if (!token) return;
@@ -208,6 +206,51 @@ const handleDeleteItem = async (item) => {
     }
 };
 
+const openDetail = async (item) => {
+    if (item.source === 'applied') {
+        isLoadingData.value = true;
+        try {
+            const token = getAuthToken();
+            const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+            const res = await axios.get(`${backendUrl}/user/pendaftaran/${item.rawId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const detail = res.data.data;
+            existingRegistration.value = detail;
+            
+            // Build the program object for RegistrationModal
+            const programData = detail.beasiswa_id ? detail.beasiswa : detail.olimpiade;
+            if (programData) {
+                registrationProgram.value = {
+                    ...programData,
+                    type: detail.beasiswa_id ? 'Beasiswa' : 'Olimpiade',
+                    title: programData.nama || programData.judul,
+                    instansi: { nama: 'Penyelenggara Resmi' }
+                };
+            } else {
+                // Fallback if program data not in response - create minimal object
+                registrationProgram.value = {
+                    id: detail.beasiswa_id || detail.olimpiade_id,
+                    type: detail.beasiswa_id ? 'Beasiswa' : 'Olimpiade',
+                    title: item.title || 'Program',
+                    nama: item.title || 'Program',
+                    deadline: null,
+                    instansi: { nama: 'Penyelenggara Resmi' }
+                };
+            }
+            
+            showRegistrationModal.value = true;
+        } catch (e) {
+            console.error('openDetail error:', e);
+            showToast('Gagal memuat detail pendaftaran: ' + (e.response?.data?.error || e.message), 'error');
+        } finally {
+            isLoadingData.value = false;
+        }
+    } else {
+        showToast('Fitur edit detail hanya tersedia untuk pendaftaran aktif.', 'warning');
+    }
+};
+
 onMounted(() => {
     fetchData();
 });
@@ -237,8 +280,8 @@ onMounted(() => {
             
             <!-- Page Header -->
             <div class="space-y-1">
-                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">My Programs</h1>
-                <p class="text-sm font-medium text-slate-500">
+                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">My Programs</h1>
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
                     Pantau status pendaftaran beasiswa dan kompetisi aktif Anda di satu tempat.
                 </p>
             </div>
@@ -246,16 +289,16 @@ onMounted(() => {
             <!-- Stats Matrix Grid -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <!-- Saved -->
-                <div class="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Saved</span>
-                        <span class="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">+12%</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Saved</span>
+                        <span class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/60">+12%</span>
                     </div>
                     <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-slate-800">{{ stats.saved }}</span>
-                        <span class="text-[10px] font-bold text-slate-400">programs</span>
+                        <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.saved }}</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">programs</span>
                     </div>
-                    <div class="absolute -right-3 -bottom-3 text-slate-50 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
+                    <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                         </svg>
@@ -263,33 +306,33 @@ onMounted(() => {
                 </div>
 
                 <!-- Applied -->
-                <div class="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Applied</span>
-                        <span class="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">+5%</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Applied</span>
+                        <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800/60">+5%</span>
                     </div>
                     <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-slate-800">{{ stats.applied }}</span>
-                        <span class="text-[10px] font-bold text-slate-400">submissions</span>
+                        <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.applied }}</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">submissions</span>
                     </div>
-                    <div class="absolute -right-3 -bottom-3 text-slate-50 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
+                    <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
                         </svg>
                     </div>
                 </div>
 
-                <!-- Interviews -->
-                <div class="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                <!-- Pending / In Progress -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Interviews</span>
-                        <span class="text-[10px] font-black text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">Stable</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Pending</span>
+                        <span class="text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-100 dark:border-slate-700">In Progress</span>
                     </div>
                     <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-slate-800">{{ stats.interviews }}</span>
-                        <span class="text-[10px] font-bold text-slate-400">interviews</span>
+                        <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.interviews }}</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">pending</span>
                     </div>
-                    <div class="absolute -right-3 -bottom-3 text-slate-50 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
+                    <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
                         </svg>
@@ -297,16 +340,16 @@ onMounted(() => {
                 </div>
 
                 <!-- Results -->
-                <div class="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
+                <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Results</span>
-                        <span class="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">New</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Results</span>
+                        <span class="text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-800/60">New</span>
                     </div>
                     <div class="flex items-baseline gap-2">
-                        <span class="text-3xl font-black text-slate-800">{{ stats.results }}</span>
-                        <span class="text-[10px] font-bold text-slate-400">decisions</span>
+                        <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.results }}</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">decisions</span>
                     </div>
-                    <div class="absolute -right-3 -bottom-3 text-slate-50 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
+                    <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                         </svg>
@@ -315,21 +358,21 @@ onMounted(() => {
             </div>
 
             <!-- Active Trackings Table Container -->
-            <div class="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
+            <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
                 <!-- Table Header Controls -->
-                <div class="p-6 border-b border-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h2 class="text-lg font-black text-slate-800">Active Trackings</h2>
+                <div class="p-6 border-b border-slate-50 dark:border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h2 class="text-lg font-black text-slate-800 dark:text-white">Active Trackings</h2>
                     
                     <div class="flex flex-col sm:flex-row items-center gap-3">
                         <!-- Filters -->
-                        <div class="flex rounded-xl bg-slate-100 p-1 w-full sm:w-auto">
+                        <div class="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 w-full sm:w-auto">
                             <button
                                 v-for="filt in ['All', 'Scholarships', 'Competitions']"
                                 :key="filt"
                                 type="button"
                                 @click="activeFilter = filt; currentPage = 1"
                                 class="px-4 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
-                                :class="activeFilter === filt ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'"
+                                :class="activeFilter === filt ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
                             >
                                 {{ filt }}
                             </button>
@@ -337,7 +380,7 @@ onMounted(() => {
 
                         <!-- Search Box -->
                         <div class="relative w-full sm:w-64">
-                            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400 dark:text-slate-500">
                                 <svg class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
@@ -346,7 +389,7 @@ onMounted(() => {
                                 type="text"
                                 v-model="search"
                                 placeholder="Search Insights..."
-                                class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500 dark:focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                             />
                         </div>
                     </div>
@@ -356,7 +399,7 @@ onMounted(() => {
                 <div class="overflow-x-auto">
                     <table class="w-full border-collapse text-left">
                         <thead>
-                            <tr class="border-b border-slate-50 bg-slate-50/20 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                            <tr class="border-b border-slate-50 dark:border-slate-800/60 bg-slate-50/20 dark:bg-slate-800/20 text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">
                                 <th class="py-4 px-6">Program Name</th>
                                 <th class="py-4 px-6">Type</th>
                                 <th class="py-4 px-6">Status</th>
@@ -364,23 +407,23 @@ onMounted(() => {
                                 <th class="py-4 px-6 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-50 text-xs">
-                            <tr v-for="item in paginatedTrackings" :key="item.id" class="hover:bg-slate-50/30 transition duration-150">
+                        <tbody class="divide-y divide-slate-50 dark:divide-slate-800/60 text-xs">
+                            <tr v-for="item in paginatedTrackings" :key="item.id" class="hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition duration-150">
                                 <!-- Program Name -->
                                 <td class="py-4 px-6">
                                     <div class="flex items-center gap-3">
-                                        <div class="h-8 w-8 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 text-slate-400 font-bold uppercase text-[10px]">
+                                        <div class="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-slate-400 dark:text-slate-500 font-bold uppercase text-[10px]">
                                             {{ item.title ? item.title.slice(0,2) : 'SP' }}
                                         </div>
                                         <div>
-                                            <p class="font-bold text-slate-800 leading-snug">{{ item.title }}</p>
-                                            <p class="text-[10px] font-bold text-slate-400 mt-0.5">ScholarPath Partner</p>
+                                            <p class="font-bold text-slate-800 dark:text-slate-200 leading-snug">{{ item.title }}</p>
+                                            <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">ScholarPath Partner</p>
                                         </div>
                                     </div>
                                 </td>
 
                                 <!-- Type -->
-                                <td class="py-4 px-6 font-bold text-slate-500">
+                                <td class="py-4 px-6 font-bold text-slate-500 dark:text-slate-400">
                                     {{ item.type }}
                                 </td>
 
@@ -388,16 +431,18 @@ onMounted(() => {
                                 <td class="py-4 px-6">
                                     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase border"
                                         :class="{
-                                            'bg-emerald-50 text-emerald-700 border-emerald-100': item.status?.toLowerCase() === 'interview' || item.status?.toLowerCase() === 'wawancara',
-                                            'bg-blue-50 text-blue-700 border-blue-100': item.status?.toLowerCase() === 'applied' || item.status?.toLowerCase() === 'daftar',
-                                            'bg-slate-50 text-slate-600 border-slate-100': item.status?.toLowerCase() === 'saved' || item.status?.toLowerCase() === 'simpan'
+                                            'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800/60': item.status?.toLowerCase() === 'accepted',
+                                            'bg-red-50 text-red-700 border-red-100 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/60': item.status?.toLowerCase() === 'rejected',
+                                            'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/60': item.status?.toLowerCase() === 'pending' || item.status?.toLowerCase() === 'applied',
+                                            'bg-slate-50 text-slate-600 border-slate-100 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700': item.status?.toLowerCase() === 'saved' || item.status?.toLowerCase() === 'simpan'
                                         }"
                                     >
                                         <span class="h-1.5 w-1.5 rounded-full"
                                             :class="{
-                                                'bg-emerald-500': item.status?.toLowerCase() === 'interview' || item.status?.toLowerCase() === 'wawancara',
-                                                'bg-blue-500': item.status?.toLowerCase() === 'applied' || item.status?.toLowerCase() === 'daftar',
-                                                'bg-slate-400': item.status?.toLowerCase() === 'saved' || item.status?.toLowerCase() === 'simpan'
+                                                'bg-emerald-500 dark:bg-emerald-400': item.status?.toLowerCase() === 'accepted',
+                                                'bg-red-500 dark:bg-red-400': item.status?.toLowerCase() === 'rejected',
+                                                'bg-amber-500 dark:bg-amber-400': item.status?.toLowerCase() === 'pending' || item.status?.toLowerCase() === 'applied',
+                                                'bg-slate-400 dark:bg-slate-500': item.status?.toLowerCase() === 'saved' || item.status?.toLowerCase() === 'simpan'
                                             }"
                                         ></span>
                                         {{ item.status }}
@@ -406,25 +451,25 @@ onMounted(() => {
 
                                 <!-- Deadline -->
                                 <td class="py-4 px-6">
-                                    <p class="font-bold text-slate-700">{{ item.deadline }}</p>
-                                    <p class="text-[10px] font-bold text-red-500 mt-0.5">{{ item.daysLeft }}</p>
+                                    <p class="font-bold text-slate-700 dark:text-slate-300">{{ item.deadline }}</p>
+                                    <p class="text-[10px] font-bold text-red-500 dark:text-red-400 mt-0.5">{{ item.daysLeft }}</p>
                                 </td>
 
                                 <!-- Actions -->
                                 <td class="py-4 px-6 text-right space-x-2">
                                     <button
                                         type="button"
-                                        @click="selectedProgram = item"
-                                        class="text-indigo-600 hover:text-indigo-700 font-bold hover:underline"
+                                        @click="openDetail(item)"
+                                        class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-bold hover:underline"
                                     >
                                         View Detail
                                     </button>
-                                    <span class="text-slate-300">|</span>
+                                    <span class="text-slate-300 dark:text-slate-600">|</span>
                                     <button
                                         type="button"
                                         :disabled="isSubmittingAction"
                                         @click="handleDeleteItem(item)"
-                                        class="text-red-500 hover:text-red-600 font-bold hover:underline disabled:opacity-50"
+                                        class="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 font-bold hover:underline disabled:opacity-50"
                                     >
                                         Cancel
                                     </button>
@@ -432,7 +477,7 @@ onMounted(() => {
                             </tr>
 
                             <tr v-if="filteredTrackings.length === 0">
-                                <td colspan="5" class="py-12 text-center text-slate-400 font-bold">
+                                <td colspan="5" class="py-12 text-center text-slate-400 dark:text-slate-500 font-bold">
                                     Tidak ada data pendaftaran aktif ditemukan.
                                 </td>
                             </tr>
@@ -441,8 +486,8 @@ onMounted(() => {
                 </div>
 
                 <!-- Table Pagination -->
-                <div class="p-6 border-t border-slate-50 flex items-center justify-between">
-                    <span class="text-xs font-bold text-slate-400">
+                <div class="p-6 border-t border-slate-50 dark:border-slate-800/60 flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-400 dark:text-slate-500">
                         Showing {{ Math.min(filteredTrackings.length, (currentPage - 1) * itemsPerPage + 1) }} to {{ Math.min(filteredTrackings.length, currentPage * itemsPerPage) }} of {{ filteredTrackings.length }} programs
                     </span>
 
@@ -451,7 +496,7 @@ onMounted(() => {
                             type="button"
                             :disabled="currentPage === 1"
                             @click="currentPage--"
-                            class="h-8 w-8 rounded-lg border border-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 transition cursor-pointer"
+                            class="h-8 w-8 rounded-lg border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-40 transition cursor-pointer"
                         >
                             <span>&lt;</span>
                         </button>
@@ -462,8 +507,8 @@ onMounted(() => {
                             @click="currentPage = pg"
                             class="h-8 w-8 rounded-lg border flex items-center justify-center text-xs font-bold transition duration-150 cursor-pointer"
                             :class="currentPage === pg 
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
-                                : 'border-slate-100 text-slate-600 hover:bg-slate-50 hover:text-slate-800'"
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm dark:bg-indigo-500 dark:border-indigo-500' 
+                                : 'border-slate-100 text-slate-600 hover:bg-slate-50 hover:text-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'"
                         >
                             {{ pg }}
                         </button>
@@ -471,7 +516,7 @@ onMounted(() => {
                             type="button"
                             :disabled="currentPage === totalPages"
                             @click="currentPage++"
-                            class="h-8 w-8 rounded-lg border border-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40 transition cursor-pointer"
+                            class="h-8 w-8 rounded-lg border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-40 transition cursor-pointer"
                         >
                             <span>&gt;</span>
                         </button>
@@ -479,64 +524,15 @@ onMounted(() => {
                 </div>
             </div>
 
-            <!-- Detail Modal -->
-            <transition name="fade">
-                <div v-if="selectedProgram" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-                    <!-- Close on Backdrop Click -->
-                    <div class="absolute inset-0" @click="selectedProgram = null"></div>
-
-                    <!-- Modal Shell -->
-                    <div class="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-lg w-full relative z-10 animate-scale">
-                        <div class="flex justify-between items-start mb-4">
-                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase text-white"
-                                :class="selectedProgram.type === 'Beasiswa' ? 'bg-rose-500' : 'bg-violet-500'"
-                            >
-                                {{ selectedProgram.type }}
-                            </span>
-                            <button type="button" @click="selectedProgram = null" class="text-slate-400 hover:text-slate-600 transition">
-                                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        <div class="space-y-4">
-                            <h3 class="text-xl font-extrabold text-slate-800">
-                                {{ selectedProgram.title }}
-                            </h3>
-                            <p class="text-xs leading-relaxed text-slate-500 font-semibold">
-                                Program yang Anda ikuti melalui kemitraan strategis ScholarPath dengan institusi pendidikan nasional dan internasional.
-                            </p>
-                            
-                            <!-- Additional Metadata -->
-                            <div class="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 space-y-2 text-xs text-slate-600 font-bold">
-                                <div class="flex justify-between">
-                                    <span>Tipe Program</span>
-                                    <span class="text-slate-800">{{ selectedProgram.type }}</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>Status Terkini</span>
-                                    <span class="text-slate-800 uppercase text-[10px] tracking-wider">{{ selectedProgram.status }}</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>Batas Pendaftaran</span>
-                                    <span class="text-slate-800">{{ selectedProgram.deadline }}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="flex gap-3 pt-6 mt-6 border-t border-slate-50">
-                            <button
-                                type="button"
-                                @click="selectedProgram = null"
-                                class="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-2xl border border-slate-100 transition duration-200 cursor-pointer"
-                            >
-                                Tutup Detail
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </transition>
+            <!-- Registration Detail Modal (Replaces old static modal) -->
+            <RegistrationModal 
+                :show="showRegistrationModal" 
+                :program="registrationProgram" 
+                :isEditMode="true" 
+                :existingRegistration="existingRegistration" 
+                @close="showRegistrationModal = false" 
+                @success="fetchData(); showRegistrationModal = false" 
+            />
 
         </div>
     </AuthenticatedLayout>

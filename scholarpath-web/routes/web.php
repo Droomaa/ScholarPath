@@ -41,9 +41,7 @@ Route::get('/pelamar', function () {
     return Inertia::render('Institution/Pelamar');
 })->middleware(['auth', 'verified'])->name('pelamar');
 
-Route::get('/profil-instansi', function () {
-    return Inertia::render('Institution/ProfilInstansi');
-})->middleware(['auth', 'verified'])->name('profil-instansi');
+
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/admin/dashboard', function () {

@@ -20,6 +20,11 @@ type User struct {
 	UpdatedAt       time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
+type UserPreference struct {
+	UserID uint   `gorm:"primaryKey" json:"user_id"`
+	Theme  string `gorm:"default:'light'" json:"theme"`
+}
+
 type Instansi struct {
 	ID         uint      `gorm:"primaryKey;column:id" json:"id"`
 	UserID     *uint     `gorm:"column:user_id" json:"user_id"`
@@ -68,6 +73,10 @@ type Olimpiade struct {
 	Kuota            int       `gorm:"column:kuota" json:"kuota"`
 	BiayaPendaftaran float64   `gorm:"column:biaya_pendaftaran" json:"biaya_pendaftaran"`
 	LinkInformasi    string    `gorm:"column:link_informasi" json:"link_informasi"`
+	Deadline         time.Time `gorm:"column:deadline" json:"deadline"`
+	GambarPoster     string    `gorm:"column:gambar_poster" json:"gambar_poster"`
+	Status           string    `gorm:"column:status;default:'pending'" json:"status"`
+	IsVisible        bool      `gorm:"column:is_visible;default:false" json:"is_visible"`
 	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
@@ -84,6 +93,10 @@ type Beasiswa struct {
 	TipeBeasiswa     string    `gorm:"column:tipe_beasiswa" json:"tipe_beasiswa"`
 	NominalPendanaan float64   `gorm:"column:nominal_pendanaan" json:"nominal_pendanaan"`
 	LinkInformasi    string    `gorm:"column:link_informasi" json:"link_informasi"`
+	Deadline         time.Time `gorm:"column:deadline" json:"deadline"`
+	GambarPoster     string    `gorm:"column:gambar_poster" json:"gambar_poster"`
+	Status           string    `gorm:"column:status;default:'pending'" json:"status"`
+	IsVisible        bool      `gorm:"column:is_visible;default:false" json:"is_visible"`
 	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
@@ -97,10 +110,15 @@ type Pendaftaran struct {
 	UserID        uint      `gorm:"column:user_id" json:"user_id"`
 	BeasiswaID    *uint     `gorm:"column:beasiswa_id" json:"beasiswa_id"`
 	OlimpiadeID   *uint     `gorm:"column:olimpiade_id" json:"olimpiade_id"`
-	StatusID      *uint     `gorm:"column:status_id" json:"status_id"`
-	TanggalDaftar time.Time `gorm:"column:tanggal_daftar;default:CURRENT_TIMESTAMP" json:"tanggal_daftar"`
-	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	StatusID          *uint     `gorm:"column:status_id" json:"status_id"`
+	ResumeUrl         string    `gorm:"column:resume_url" json:"resume_url"`
+	ReportCardUrl     string    `gorm:"column:report_card_url" json:"report_card_url"`
+	ProposalUrl       string    `gorm:"column:proposal_url" json:"proposal_url"`
+	RecommendationUrl string    `gorm:"column:recommendation_url" json:"recommendation_url"`
+	Alasan            string    `gorm:"column:alasan" json:"alasan"`
+	TanggalDaftar     time.Time `gorm:"column:tanggal_daftar;default:CURRENT_TIMESTAMP" json:"tanggal_daftar"`
+	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 type Notification struct {

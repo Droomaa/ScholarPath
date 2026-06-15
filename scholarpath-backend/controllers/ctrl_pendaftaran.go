@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,8 +26,13 @@ type ApplicantDetail struct {
 	Keahlian      string    `json:"keahlian"`
 	ProgramType   string    `json:"program_type"` // "Beasiswa" ATAU "Olimpiade"
 	ProgramTitle  string    `json:"program_title"`
-	StatusID      *uint     `json:"status_id"`
-	TanggalDaftar time.Time `json:"tanggal_daftar"`
+	StatusID          *uint     `json:"status_id"`
+	TanggalDaftar     time.Time `json:"tanggal_daftar"`
+	ResumeUrl         string    `json:"resume_url"`
+	ReportCardUrl     string    `json:"report_card_url"`
+	ProposalUrl       string    `json:"proposal_url"`
+	RecommendationUrl string    `json:"recommendation_url"`
+	Alasan            string    `json:"alasan"`
 }
 // CREATE PENDAFTARAN
 func CreatePendaftaran(c *gin.Context) {
@@ -37,18 +44,60 @@ func CreatePendaftaran(c *gin.Context) {
 	}
 
 	var pendaftaran models.Pendaftaran
-	if err := c.ShouldBindJSON(&pendaftaran); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 2. Masukkan userID yang sudah di-parsing dengan aman
 	pendaftaran.UserID = userID
+	pendaftaran.TanggalDaftar = time.Now()
 
-	// Set tanggal daftar otomatis ke waktu sekarang jika belum ada
-	if pendaftaran.TanggalDaftar.IsZero() {
-		pendaftaran.TanggalDaftar = time.Now()
+	beasiswaIDStr := c.PostForm("beasiswa_id")
+	if beasiswaIDStr != "" {
+		id, _ := strconv.ParseUint(beasiswaIDStr, 10, 32)
+		val := uint(id)
+		
+		// Mencegah pendaftaran ganda
+		var existing models.Pendaftaran
+		if err := koneksi.DB.Where("user_id = ? AND beasiswa_id = ?", userID, val).First(&existing).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Anda sudah mendaftar program beasiswa ini"})
+			return
+		}
+		
+		pendaftaran.BeasiswaID = &val
 	}
+
+	olimpiadeIDStr := c.PostForm("olimpiade_id")
+	if olimpiadeIDStr != "" {
+		id, _ := strconv.ParseUint(olimpiadeIDStr, 10, 32)
+		val := uint(id)
+		
+		// Mencegah pendaftaran ganda
+		var existing models.Pendaftaran
+		if err := koneksi.DB.Where("user_id = ? AND olimpiade_id = ?", userID, val).First(&existing).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Anda sudah mendaftar program kompetisi ini"})
+			return
+		}
+		
+		pendaftaran.OlimpiadeID = &val
+	}
+	
+	statusVal := uint(1) // 1 = Pending / In Progress
+	pendaftaran.StatusID = &statusVal
+	pendaftaran.Alasan = c.PostForm("alasan")
+
+	// Helper for file upload
+	uploadFile := func(formKey string) string {
+		file, err := c.FormFile(formKey)
+		if err == nil {
+			filename := fmt.Sprintf("%d_%d_%s", time.Now().Unix(), userID, file.Filename)
+			filepath := "storage/uploads/" + filename
+			if err := c.SaveUploadedFile(file, filepath); err == nil {
+				return "/uploads/" + filename
+			}
+		}
+		return ""
+	}
+
+	pendaftaran.ResumeUrl = uploadFile("resume")
+	pendaftaran.ReportCardUrl = uploadFile("report_card")
+	pendaftaran.ProposalUrl = uploadFile("proposal")
+	pendaftaran.RecommendationUrl = uploadFile("recommendation")
 
 	// Simpan ke database
 	if err := koneksi.DB.Create(&pendaftaran).Error; err != nil {
@@ -174,7 +223,8 @@ func GetInstansiApplicants(c *gin.Context) {
 				p.id as pendaftaran_id, u.id as student_id, u.name as student_name, u.email as student_email, u.keahlian,
 				CASE WHEN p.beasiswa_id IS NOT NULL THEN 'Beasiswa' ELSE 'Olimpiade' END as program_type,
 				COALESCE(b.nama, o.judul) as program_title,
-				p.status_id, p.tanggal_daftar
+				p.status_id, p.tanggal_daftar,
+				p.resume_url, p.report_card_url, p.proposal_url, p.recommendation_url, p.alasan
 			FROM pendaftarans p
 			JOIN users u ON p.user_id = u.id
 			LEFT JOIN beasiswas b ON p.beasiswa_id = b.id
@@ -189,7 +239,8 @@ func GetInstansiApplicants(c *gin.Context) {
 				p.id as pendaftaran_id, u.id as student_id, u.name as student_name, u.email as student_email, u.keahlian,
 				CASE WHEN p.beasiswa_id IS NOT NULL THEN 'Beasiswa' ELSE 'Olimpiade' END as program_type,
 				COALESCE(b.nama, o.judul) as program_title,
-				p.status_id, p.tanggal_daftar
+				p.status_id, p.tanggal_daftar,
+				p.resume_url, p.report_card_url, p.proposal_url, p.recommendation_url, p.alasan
 			FROM pendaftarans p
 			JOIN users u ON p.user_id = u.id
 			LEFT JOIN beasiswas b ON p.beasiswa_id = b.id
@@ -291,18 +342,21 @@ func GetRiwayatPendaftaranSiswa(c *gin.Context) {
 
 	var riwayat []RiwayatPendaftaran
 
-	// Query RAW SQL dengan JOIN ke tabel status_pendaftarans agar nama statusnya ikut terbaca
+	// Query RAW SQL dengan CASE untuk mendapatkan status_name
 	query := `
 		SELECT 
 			p.id as pendaftaran_id,
 			CASE WHEN p.beasiswa_id IS NOT NULL THEN 'Beasiswa' ELSE 'Olimpiade' END as program_type,
 			COALESCE(b.nama, o.judul) as program_title,
-			sp.nama as status_name,
+			CASE 
+				WHEN p.status_id = 3 THEN 'Accepted'
+				WHEN p.status_id = 4 THEN 'Rejected'
+				ELSE 'Pending'
+			END as status_name,
 			p.tanggal_daftar
 		FROM pendaftarans p
 		LEFT JOIN beasiswas b ON p.beasiswa_id = b.id
 		LEFT JOIN olimpiades o ON p.olimpiade_id = o.id
-		LEFT JOIN status_pendaftarans sp ON p.status_id = sp.id
 		WHERE p.user_id = ?
 		ORDER BY p.tanggal_daftar DESC
 	`
@@ -313,4 +367,103 @@ func GetRiwayatPendaftaranSiswa(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": riwayat})
+}
+
+func GetPendaftaranDetailSiswa(c *gin.Context) {
+	userID, exists := getUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Anda harus login"})
+		return
+	}
+
+	pendaftaranID := c.Param("id")
+	var pendaftaran models.Pendaftaran
+
+	if err := koneksi.DB.Where("id = ? AND user_id = ?", pendaftaranID, userID).First(&pendaftaran).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Data pendaftaran tidak ditemukan atau Anda tidak berhak"})
+		return
+	}
+
+	response := gin.H{
+		"id": pendaftaran.ID,
+		"user_id": pendaftaran.UserID,
+		"beasiswa_id": pendaftaran.BeasiswaID,
+		"olimpiade_id": pendaftaran.OlimpiadeID,
+		"status_id": pendaftaran.StatusID,
+		"resume_url": pendaftaran.ResumeUrl,
+		"report_card_url": pendaftaran.ReportCardUrl,
+		"proposal_url": pendaftaran.ProposalUrl,
+		"recommendation_url": pendaftaran.RecommendationUrl,
+		"alasan": pendaftaran.Alasan,
+		"tanggal_daftar": pendaftaran.TanggalDaftar,
+	}
+
+	if pendaftaran.BeasiswaID != nil {
+		var b models.Beasiswa
+		koneksi.DB.First(&b, pendaftaran.BeasiswaID)
+		response["beasiswa"] = b
+	} else if pendaftaran.OlimpiadeID != nil {
+		var o models.Olimpiade
+		koneksi.DB.First(&o, pendaftaran.OlimpiadeID)
+		response["olimpiade"] = o
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": response})
+}
+
+func UpdatePendaftaranBerkas(c *gin.Context) {
+	userID, exists := getUserIDFromContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Anda harus login"})
+		return
+	}
+
+	pendaftaranID := c.Param("id")
+	var pendaftaran models.Pendaftaran
+
+	if err := koneksi.DB.Where("id = ? AND user_id = ?", pendaftaranID, userID).First(&pendaftaran).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Data pendaftaran tidak ditemukan atau Anda tidak berhak"})
+		return
+	}
+
+	alasan := c.PostForm("alasan")
+	if alasan != "" {
+		pendaftaran.Alasan = alasan
+	}
+
+	// Helper for file upload
+	uploadFile := func(formKey string) string {
+		file, err := c.FormFile(formKey)
+		if err == nil {
+			filename := fmt.Sprintf("%d_%d_%s", time.Now().Unix(), userID, file.Filename)
+			filepath := "storage/uploads/" + filename
+			if err := c.SaveUploadedFile(file, filepath); err == nil {
+				return "/uploads/" + filename
+			}
+		}
+		return ""
+	}
+
+	if url := uploadFile("resume"); url != "" {
+		pendaftaran.ResumeUrl = url
+	}
+	if url := uploadFile("report_card"); url != "" {
+		pendaftaran.ReportCardUrl = url
+	}
+	if url := uploadFile("proposal"); url != "" {
+		pendaftaran.ProposalUrl = url
+	}
+	if url := uploadFile("recommendation"); url != "" {
+		pendaftaran.RecommendationUrl = url
+	}
+
+	if err := koneksi.DB.Save(&pendaftaran).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan data: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Berkas pendaftaran berhasil diperbarui",
+		"data":    pendaftaran,
+	})
 }

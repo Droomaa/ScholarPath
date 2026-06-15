@@ -21,8 +21,39 @@ const userProfile = ref({
     name: '',
     role: 'Student',
     keahlian: '',
-    foto: ''
+    foto: '',
+    theme: 'light'
 });
+
+const isDarkMode = ref(false);
+
+const applyTheme = (theme) => {
+    if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        isDarkMode.value = true;
+    } else {
+        document.documentElement.classList.remove('dark');
+        isDarkMode.value = false;
+    }
+    localStorage.setItem('theme', theme);
+};
+
+const toggleDarkMode = async () => {
+    const newTheme = isDarkMode.value ? 'light' : 'dark';
+    applyTheme(newTheme);
+    
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        try {
+            await axios.put(`${backendUrl}/user/profile`, {
+                theme: newTheme
+            }, { headers: { Authorization: `Bearer ${token}` } });
+        } catch (e) {
+            console.error('Failed to save theme preference', e);
+        }
+    }
+};
 
 // Search
 const searchQuery = ref('');
@@ -131,6 +162,12 @@ const toggleNotifications = () => {
 };
 
 onMounted(() => {
+    // Read local theme first for faster apply
+    const localTheme = localStorage.getItem('theme');
+    if (localTheme) {
+        applyTheme(localTheme);
+    }
+
     // Get user details from localStorage
     const savedName = localStorage.getItem('auth_name');
     const savedRole = localStorage.getItem('auth_role');
@@ -167,6 +204,10 @@ onMounted(() => {
                 if (u.role) {
                     userProfile.value.role = u.role === 'student' ? 'Student' : u.role;
                 }
+                if (u.theme) {
+                    userProfile.value.theme = u.theme;
+                    applyTheme(u.theme);
+                }
             }
         }).catch(err => {
             console.error('Failed to load profile details in layout:', err);
@@ -176,12 +217,12 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-[#f8fafc] text-slate-800 font-sans flex overflow-hidden">
+    <div class="min-h-screen bg-[#f8fafc] dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans flex overflow-hidden">
         
         <!-- Sidebar (Desktop) -->
-        <aside class="hidden lg:flex flex-col w-[260px] bg-white border-r border-slate-100 shrink-0 h-screen sticky top-0">
+        <aside class="hidden lg:flex flex-col w-[260px] bg-white dark:bg-slate-800 border-r border-slate-100 dark:border-slate-700/50 shrink-0 h-screen sticky top-0">
             <!-- Brand Logo -->
-            <div class="px-6 h-20 flex flex-col justify-center border-b border-slate-50">
+            <div class="px-6 h-20 flex flex-col justify-center border-b border-slate-50 dark:border-slate-700/50">
                 <Link href="/" class="flex flex-col group">
                     <span class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent group-hover:opacity-80 transition">
                         ScholarPath
@@ -309,19 +350,6 @@ onMounted(() => {
                         Pelamar
                     </Link>
 
-                    <!-- Profil Instansi -->
-                    <Link
-                        :href="route('profil-instansi')"
-                        class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                        :class="route().current('profil-instansi') 
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' 
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'"
-                    >
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        Profil Instansi
-                    </Link>
                 </template>
 
                 <template v-else>
@@ -403,7 +431,7 @@ onMounted(() => {
         <div class="flex-1 flex flex-col h-screen overflow-hidden">
             
             <!-- Topbar Header -->
-            <header class="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-6 shrink-0 relative z-20">
+            <header class="h-20 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700/50 flex items-center justify-between px-6 shrink-0 relative z-20">
                 <!-- Search Insights -->
                 <div class="flex items-center gap-3 flex-1 max-w-md">
                     <div class="relative w-full">
@@ -417,7 +445,7 @@ onMounted(() => {
                             @keydown.enter="handleSearch"
                             type="text"
                             placeholder="Search scholarships, labs, competitions..."
-                            class="w-full pl-11 pr-12 py-2.5 bg-slate-50 border border-slate-100 focus:bg-white focus:border-indigo-500 rounded-2xl text-sm text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-indigo-500/5 transition outline-none"
+                            class="w-full pl-11 pr-12 py-2.5 bg-slate-50 border border-slate-100 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500 rounded-2xl text-sm text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-indigo-500/5 transition outline-none"
                         />
                         <button
                             @click="handleSearch"
@@ -432,11 +460,17 @@ onMounted(() => {
 
                 <!-- Right profile controls -->
                 <div class="flex items-center gap-5">
+                    <!-- Theme Toggle -->
+                    <button @click="toggleDarkMode" class="p-2 rounded-xl hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-100 focus:outline-none">
+                        <svg v-if="!isDarkMode" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                        <svg v-else class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    </button>
+
                     <!-- Notifications -->
                     <div class="relative">
                         <button
                             @click="toggleNotifications"
-                            class="relative h-10 w-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition focus:outline-none"
+                            class="relative h-10 w-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-100 focus:outline-none"
                         >
                             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -492,7 +526,7 @@ onMounted(() => {
                                 {{ userProfile.name || $page.props.auth.user.name }}
                             </h4>
                             <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
-                                {{ userProfile.keahlian ? `${userProfile.role} • ${userProfile.keahlian}` : userProfile.role }}
+                                {{ userProfile.role }}
                             </p>
                         </div>
                         <!-- Profile Image -->
@@ -601,14 +635,6 @@ onMounted(() => {
                         >
                             Pelamar
                         </Link>
-                        <!-- Profil Instansi -->
-                        <Link
-                            :href="route('profil-instansi')"
-                            class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                            :class="route().current('profil-instansi') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
-                        >
-                            Profil Instansi
-                        </Link>
                     </template>
                     <template v-else>
                         <!-- Dashboard -->
@@ -659,7 +685,7 @@ onMounted(() => {
             </aside>
 
             <!-- Main Page Content Area -->
-            <main class="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/40">
+            <main class="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/40 dark:bg-slate-900">
                 <slot />
             </main>
         </div>

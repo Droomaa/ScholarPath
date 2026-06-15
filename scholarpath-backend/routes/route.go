@@ -38,6 +38,8 @@ func SetupRouter() *gin.Engine {
 		protected.GET("/user/profile", controllers.GetMyProfile)
 		protected.PUT("/user/profile", controllers.UpdateProfile)
 		protected.GET("/user/pendaftaran", controllers.GetRiwayatPendaftaranSiswa)
+		protected.GET("/user/pendaftaran/:id", controllers.GetPendaftaranDetailSiswa)
+		protected.PUT("/user/pendaftaran/:id/berkas", controllers.UpdatePendaftaranBerkas)
         
 		// --- FITUR WISHLIST SISWA ---
 		protected.POST("/user/wishlist", controllers.AddToWishlist)

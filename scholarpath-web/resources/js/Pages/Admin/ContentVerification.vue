@@ -1,14 +1,25 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
-const queue = ref([]);
+// --- MOCK DATA: sorted by oldest pending first ---
+const today = new Date();
+const daysAgo = (n) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - n);
+    return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+};
+
+const rawQueue = ref([]);
+
+const approvedToday = ref(0);
+const declinedToday = ref(0);
+const revisionRate = ref('0%');
+
 const activeItem = ref(null);
-const activeItemDetails = ref(null);
-const isLoadingQueue = ref(false);
-const isLoadingDetails = ref(false);
+const selectedProgram = ref(null);
 const messageToast = ref({ text: '', type: '' });
 const isActioning = ref(false);
 
@@ -16,527 +27,352 @@ const isActioning = ref(false);
 const showRevisionModal = ref(false);
 const revisionFeedback = ref('');
 
-// AI Quality Analysis
-const aiScore = ref(0);
-const aiFeedback = ref([]);
-const isAnalyzingAI = ref(false);
-
-const getAuthToken = () => localStorage.getItem('auth_token');
+// Reject Modal
+const showRejectModal = ref(false);
+const rejectTitle = ref('');
+const rejectDesc = ref('');
 
 const showToast = (text, type = 'success') => {
     messageToast.value = { text, type };
-    setTimeout(() => {
-        messageToast.value = { text: '', type: '' };
-    }, 4500);
+    setTimeout(() => { messageToast.value = { text: '', type: '' }; }, 4500);
 };
 
-// Fetch list of pending verifications
-const fetchQueue = async () => {
-    const token = getAuthToken();
-    if (!token) return;
+const getAuthToken = () => localStorage.getItem('auth_token');
 
-    isLoadingQueue.value = true;
+// Sorted by oldest first
+const sortedQueue = computed(() =>
+    [...rawQueue.value].sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at))
+);
+
+const pendingCount = computed(() => rawQueue.value.filter(q => q.status === 'pending' || q.status === 'pending-resubmit').length);
+
+const selectItem = async (item) => { 
+    activeItem.value = item; 
+    selectedProgram.value = null; // Loading state
     try {
+        const token = getAuthToken();
         const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        const response = await axios.get(`${backendUrl}/admin/verification-queue`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        let detailData = {};
         
-        if (response.data && response.data.data) {
-            // Filter only content items (Scholarship Content or Competition Content)
-            queue.value = response.data.data.filter(item => 
-                item.type === 'Scholarship Content' || item.type === 'Competition Content'
-            );
-
-            // Select first item by default if nothing is selected yet
-            if (queue.value.length > 0 && !activeItem.value) {
-                selectItem(queue.value[0]);
-            }
-        }
-    } catch (error) {
-        console.error('Failed to fetch content verification queue:', error);
-        // Fallback mockup
-        queue.value = [
-            { id: 101, name: 'Global Excellence Scholarship 2024 (Stanford University)', type: 'Scholarship Content', submission_date: '24 Oct 2023', status: 'PENDING' },
-            { id: 102, name: 'Stem Innovation Grant (MIT Research Labs)', type: 'Scholarship Content', submission_date: '23 Oct 2023', status: 'PENDING' },
-            { id: 103, name: 'Creative Arts Fellowship (Parsons School of Design)', type: 'Scholarship Content', submission_date: '22 Oct 2023', status: 'PENDING' },
-            { id: 104, name: 'Future Diplomats Award (Georgetown University)', type: 'Competition Content', submission_date: '21 Oct 2023', status: 'PENDING' }
-        ];
-        if (!activeItem.value) {
-            selectItem(queue.value[0]);
-        }
-    } finally {
-        isLoadingQueue.value = false;
-    }
-};
-
-const selectItem = async (item) => {
-    activeItem.value = item;
-    const token = getAuthToken();
-    if (!token) return;
-
-    isLoadingDetails.value = true;
-    activeItemDetails.value = null;
-    try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        let url = '';
         if (item.type === 'Scholarship Content') {
-            url = `${backendUrl}/beasiswa/${item.id}`;
-        } else {
-            url = `${backendUrl}/olimpiade/${item.id}`;
+            const res = await axios.get(`${backendUrl}/beasiswa/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
+            detailData = res.data?.data || {};
+        } else if (item.type === 'Competition Content') {
+            const res = await axios.get(`${backendUrl}/olimpiade/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
+            detailData = res.data?.data || {};
         }
-
-        const response = await axios.get(url, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (response.data && response.data.data) {
-            activeItemDetails.value = response.data.data;
-            runAIAnalysis(response.data.data, item.type);
-        }
-    } catch (error) {
-        console.error('Failed to load item details:', error);
-        // Mock details for standard items
-        if (item.id === 101 || item.type === 'Scholarship Content') {
-            activeItemDetails.value = {
-                id: item.id,
-                nama: item.name || 'Global Excellence Scholarship 2024',
-                deskripsi: 'The Global Excellence Scholarship is designed to support high-achieving students from developing nations who demonstrate exceptional leadership potential and academic rigor. Our program covers full tuition, living expenses, and provides a dedicated research stipend.',
-                kuota_pendaftar: 25,
-                tipe_beasiswa: 'Penuh (Full)',
-                nominal_pendanaan: 45000,
-                link_informasi: 'https://stanford.edu/scholarship-global',
-                instansi_id: 1
-            };
-        } else {
-            activeItemDetails.value = {
-                id: item.id,
-                judul: item.name || 'Future Diplomats Award',
-                deskripsi: 'A national model UN type competition evaluating international relations debate skills and diplomatic resolution drafting.',
-                kuota: 150,
-                tipe_lomba: 'Akademik',
-                biaya_pendaftaran: 150000,
-                link_informasi: 'https://georgetown.edu/diplomats',
-                instansi_id: 2
-            };
-        }
-        runAIAnalysis(activeItemDetails.value, item.type);
-    } finally {
-        isLoadingDetails.value = false;
+        
+        selectedProgram.value = { ...item, ...detailData };
+    } catch (e) {
+        selectedProgram.value = { ...item };
+        console.error("Gagal menarik detail program", e);
     }
 };
 
-// Client-side AI verification engine to evaluate content and compute match metrics
-const runAIAnalysis = async (details, type) => {
-    isAnalyzingAI.value = true;
-    
-    // Attempt real connection to AI server if running locally
+// Load from backend
+onMounted(async () => {
+    const token = getAuthToken();
+    if (!token) return;
     try {
-        const desc = details.deskripsi || '';
-        const matchResponse = await axios.post('http://localhost:8001/api/match', {
-            user_skill: "Post-graduate leadership STEM research global education",
-            beasiswa_requirement: desc,
-            top_k: 1
-        });
-        
-        if (matchResponse.data && matchResponse.data.match_score !== undefined) {
-            aiScore.value = matchResponse.data.match_score;
-        } else {
-            calculateClientAIScore(desc, type);
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        const res = await axios.get(`${backendUrl}/admin/verification-queue`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.data?.data) {
+            rawQueue.value = res.data.data;
         }
     } catch (e) {
-        // Fallback to sophisticated heuristic analyzer
-        calculateClientAIScore(details.deskripsi || '', type);
-    } finally {
-        isAnalyzingAI.value = false;
+        console.error("Gagal menarik data antrean verifikasi", e);
     }
-};
-
-const calculateClientAIScore = (text, type) => {
-    let score = 50;
-    const feedbackList = [];
-
-    // 1. Length check
-    if (text.length > 200) {
-        score += 15;
-        feedbackList.push("Struktur deskripsi kaya dan memadai.");
-    } else {
-        score -= 10;
-        feedbackList.push("Deskripsi terlalu pendek, tambahkan rincian manfaat.");
+    if (sortedQueue.value.length > 0) {
+        selectItem(sortedQueue.value[0]);
     }
-
-    // 2. Keyword coverage
-    const keywords = ['tuition', 'biaya', 'full', 'gratis', 'persyaratan', 'kriteria', 'prestasi', 'dolar', 'scholarship', 'eligibility', 'research'];
-    let matches = 0;
-    keywords.forEach(kw => {
-        if (text.toLowerCase().includes(kw)) matches++;
-    });
-    
-    score += (matches * 3);
-    if (matches >= 3) {
-        feedbackList.push("Mengandung kata kunci struktural penting.");
-    } else {
-        feedbackList.push("Kekurangan rincian kata kunci kelayakan.");
-    }
-
-    // 3. Formality checker
-    const formalWords = ['desain', 'penerima', 'merupakan', 'disediakan', 'diharapkan', 'designed', 'academic', 'leadership'];
-    let formalMatches = 0;
-    formalWords.forEach(w => {
-        if (text.toLowerCase().includes(w)) formalMatches++;
-    });
-    score += (formalMatches * 2);
-
-    // Limit score
-    if (score > 98) score = 98;
-    if (score < 30) score = 30;
-
-    aiScore.value = score;
-    aiFeedback.value = feedbackList;
-};
-
-// Approve Content
-const handleApprove = async () => {
-    const token = getAuthToken();
-    if (!token || !activeItem.value) return;
-
-    isActioning.value = true;
-    try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        let url = '';
-        if (activeItem.value.type === 'Scholarship Content') {
-            url = `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`;
-        } else {
-            url = `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
-        }
-
-        await axios.put(url, {}, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        showToast(`Program "${activeItem.value.name}" berhasil disetujui!`, 'success');
-        
-        // Remove item from list and select another
-        const index = queue.value.findIndex(i => i.id === activeItem.value.id);
-        queue.value.splice(index, 1);
-        activeItem.value = null;
-        activeItemDetails.value = null;
-        
-        if (queue.value.length > 0) {
-            selectItem(queue.value[0]);
-        }
-    } catch (error) {
-        console.error('Failed to approve content:', error);
-        showToast('Gagal memproses persetujuan program.', 'error');
-    } finally {
-        isActioning.value = false;
-    }
-};
-
-// Send Revision Request
-const handleRequestRevision = async () => {
-    if (!revisionFeedback.value.trim()) return;
-
-    const token = getAuthToken();
-    if (!token || !activeItem.value || !activeItemDetails.value) return;
-
-    isActioning.value = true;
-    try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        
-        // Fetch target user ID of the institution that published this program
-        // We'll notify the institution publisher. We map target user ID based on instansi_id or fallback to a notification
-        const targetUserId = activeItemDetails.value.instansi_id || 1; // Fallback or look up user id
-        
-        await axios.post(`${backendUrl}/admin/notifications`, {
-            user_id: targetUserId,
-            title: `Revisi Diperlukan: ${activeItem.value.name}`,
-            message: `Konten program Anda memerlukan revisi sebelum disetujui: ${revisionFeedback.value}`
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        showToast(`Permintaan revisi telah dikirim ke pembuat program!`, 'success');
-        showRevisionModal.value = false;
-        revisionFeedback.value = '';
-
-        // Remove item from queue list
-        const index = queue.value.findIndex(i => i.id === activeItem.value.id);
-        queue.value.splice(index, 1);
-        activeItem.value = null;
-        activeItemDetails.value = null;
-        
-        if (queue.value.length > 0) {
-            selectItem(queue.value[0]);
-        }
-    } catch (error) {
-        console.error('Failed to send revision request:', error);
-        showToast('Gagal mengirim permintaan revisi.', 'error');
-    } finally {
-        isActioning.value = false;
-    }
-};
-
-onMounted(() => {
-    fetchQueue();
 });
+
+// --- APPROVE ---
+const handleApprove = async () => {
+    if (!activeItem.value) return;
+    isActioning.value = true;
+    const token = getAuthToken();
+
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        const url = activeItem.value.type === 'Scholarship Content'
+            ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
+            : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
+        await axios.put(url, { status: 'active', is_visible: true }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) { /* local fallback */ }
+
+    // Remove from local queue
+    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id);
+    if (idx !== -1) rawQueue.value.splice(idx, 1);
+    approvedToday.value++;
+    showToast(`Program "${activeItem.value.name}" berhasil disetujui dan dipublikasikan!`, 'success');
+    activeItem.value = null;
+    selectedProgram.value = null;
+    if (sortedQueue.value.length > 0) selectItem(sortedQueue.value[0]);
+    isActioning.value = false;
+};
+
+// --- REQUEST REVISION ---
+const handleRequestRevision = async () => {
+    if (!revisionFeedback.value.trim() || !activeItem.value) return;
+    isActioning.value = true;
+    const token = getAuthToken();
+
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        const url = activeItem.value.type === 'Scholarship Content'
+            ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
+            : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
+        await axios.put(url, { 
+            status: 'pending-resubmit', 
+            is_visible: false,
+            alasan: revisionFeedback.value 
+        }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) {
+        console.error("Gagal mengirim request revisi", e);
+    }
+
+    // Mark as pending-resubmit (simulate re-submit behavior)
+    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id);
+    if (idx !== -1) rawQueue.value[idx].status = 'pending-resubmit';
+
+    showToast(`Permintaan revisi dikirim. Program masuk status Pending Re-submit.`, 'success');
+    showRevisionModal.value = false;
+    revisionFeedback.value = '';
+    activeItem.value = null;
+    selectedProgram.value = null;
+    if (sortedQueue.value.length > 0) selectItem(sortedQueue.value[0]);
+    isActioning.value = false;
+};
+
+// --- REJECT (remove from list) ---
+const openRejectModal = () => {
+    rejectTitle.value = '';
+    rejectDesc.value = '';
+    showRejectModal.value = true;
+};
+
+const handleReject = async () => {
+    if (!rejectTitle.value.trim() || !rejectDesc.value.trim() || !activeItem.value) return;
+    isActioning.value = true;
+    const token = getAuthToken();
+
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        const url = activeItem.value.type === 'Scholarship Content'
+            ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
+            : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
+        await axios.put(url, { 
+            status: 'rejected', 
+            is_visible: false,
+            alasan: `${rejectTitle.value}: ${rejectDesc.value}` 
+        }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) {
+        console.error("Gagal menolak program", e);
+    }
+
+    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id);
+    if (idx !== -1) rawQueue.value.splice(idx, 1);
+    declinedToday.value++;
+    showToast(`Program "${activeItem.value.name}" telah ditolak dan dihapus dari antrean.`, 'success');
+    showRejectModal.value = false;
+    activeItem.value = null;
+    selectedProgram.value = null;
+    if (sortedQueue.value.length > 0) selectItem(sortedQueue.value[0]);
+    isActioning.value = false;
+};
 </script>
 
 <template>
     <Head title="Content Verification" />
 
     <AdminLayout>
-        <!-- Toast Notification -->
+        <!-- Toast -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold transition-all duration-300"
-                :class="{
-                    'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success',
-                    'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error'
-                }"
-            >
+            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold"
+                :class="{ 'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success', 'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error' }">
                 <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
                 {{ messageToast.text }}
             </div>
         </transition>
 
         <div class="space-y-8 text-left">
-            <!-- Header Section -->
+            <!-- Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
                     <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Content Verification Queue</h1>
-                    <p class="text-sm font-medium text-slate-500">Review and manage pending scholarship and competition submissions from verified institutions.</p>
-                </div>
-                
-                <div class="flex items-center gap-3 self-start sm:self-auto">
-                    <button class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition duration-150 cursor-pointer flex items-center gap-1.5">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                        </svg>
-                        Filter Queue
-                    </button>
-                    <button class="px-4 py-2.5 bg-purple-600 hover:bg-purple-750 text-white text-xs font-bold rounded-xl shadow-md transition duration-150 cursor-pointer flex items-center gap-1.5">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Review History
-                    </button>
+                    <p class="text-sm font-medium text-slate-500">Tinjau dan kelola program beasiswa & kompetisi yang diajukan instansi terverifikasi.</p>
                 </div>
             </div>
 
-            <!-- Main Layout Split -->
+            <!-- Header Metric Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- Queue -->
+                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm shrink-0">⏳</div>
+                    <div class="text-left">
+                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Queue</span>
+                        <p class="text-xl font-black text-slate-800">{{ pendingCount }} items</p>
+                    </div>
+                </div>
+                <!-- Approved Today -->
+                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">✓</div>
+                    <div class="text-left">
+                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Approved Today</span>
+                        <p class="text-xl font-black text-slate-800">{{ approvedToday }} items</p>
+                    </div>
+                </div>
+                <!-- Revision Rate -->
+                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm shrink-0">⚠</div>
+                    <div class="text-left">
+                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Revision Rate</span>
+                        <p class="text-xl font-black text-slate-800">{{ revisionRate }}</p>
+                    </div>
+                </div>
+                <!-- Decline Today -->
+                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold text-sm shrink-0">✗</div>
+                    <div class="text-left">
+                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Decline Today</span>
+                        <p class="text-xl font-black text-slate-800">{{ declinedToday }} items</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Layout -->
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                
-                <!-- Left Panel: Active Submission details -->
+
+                <!-- Left Panel: Active item detail -->
                 <div class="lg:col-span-8 space-y-6">
-                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm min-h-[480px] flex flex-col justify-between relative">
-                        <!-- Loader visual -->
-                        <div v-if="isLoadingDetails" class="absolute inset-0 bg-white/70 backdrop-blur-sm rounded-3xl flex items-center justify-center z-10">
-                            <div class="text-center space-y-3">
-                                <svg class="animate-spin h-8 w-8 text-purple-600 mx-auto" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <p class="text-xs font-bold text-slate-400">Loading submission details...</p>
-                            </div>
+                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm min-h-[400px] flex flex-col justify-between">
+                        <!-- Empty state / Loading state -->
+                        <div v-if="!selectedProgram" class="flex-1 flex items-center justify-center py-16 text-slate-400 font-bold text-sm flex-col gap-3">
+                            <span v-if="activeItem" class="animate-spin h-6 w-6 text-indigo-500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" class="opacity-25"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
+                            <span>{{ activeItem ? 'Memuat detail program...' : 'Pilih item dari antrean untuk memulai peninjauan.' }}</span>
                         </div>
 
-                        <!-- No Item selected -->
-                        <div v-else-if="!activeItemDetails" class="flex-1 flex items-center justify-center py-16 text-slate-400 font-bold text-sm">
-                            Pilih item dari antrean sebelah kanan untuk memulai peninjauan.
-                        </div>
-
-                        <!-- Details Loaded -->
+                        <!-- Detail view -->
                         <div v-else class="space-y-6">
-                            <!-- Title info card -->
                             <div class="flex justify-between items-start">
                                 <div class="space-y-1">
-                                    <div class="flex items-center gap-2">
-                                        <div class="h-6 w-6 rounded bg-purple-150 text-purple-600 flex items-center justify-center">
-                                            🎓
-                                        </div>
-                                        <h3 class="text-lg font-black text-slate-800 leading-tight">
-                                            {{ activeItemDetails.nama || activeItemDetails.judul }}
-                                        </h3>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full border"
+                                            :class="selectedProgram.type === 'Scholarship Content' ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'">
+                                            {{ selectedProgram.type }}
+                                        </span>
+                                        <span v-if="selectedProgram.status === 'pending-resubmit'" class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full bg-orange-50 text-orange-700 border border-orange-100">
+                                            Pending Re-submit
+                                        </span>
                                     </div>
-                                    <p class="text-xs font-semibold text-slate-450 pl-8">
-                                        {{ activeItem.type === 'Scholarship Content' ? 'Stanford University • International Office' : 'Academic Institution • Dept Lomba' }}
-                                    </p>
+                                    <h3 class="text-lg font-black text-slate-800 leading-tight">{{ selectedProgram.name || selectedProgram.judul || selectedProgram.nama }}</h3>
+                                    <p class="text-xs font-semibold text-slate-450">{{ selectedProgram.instansi || 'Instansi' }} • Submitted: {{ selectedProgram.submitted_at }}</p>
                                 </div>
                                 <span class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                                    Pending 2h
+                                    Pending
                                 </span>
                             </div>
 
-                            <!-- Two Columns Details layout -->
+                            <!-- Two column details -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-b border-slate-50 py-6">
                                 <!-- Program Details -->
                                 <div class="space-y-4">
                                     <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400">Program Details</h4>
-                                    
                                     <div class="space-y-2.5 text-xs font-bold">
                                         <div class="flex justify-between">
-                                            <span class="text-slate-400">Award Amount</span>
+                                            <span class="text-slate-400">{{ selectedProgram.type === 'Scholarship Content' ? 'Nominal Dana' : 'Biaya Pendaftaran' }}</span>
                                             <span class="text-purple-600">
-                                                {{ activeItem.type === 'Scholarship Content' 
-                                                    ? `$${(activeItemDetails.nominal_pendanaan || 45000).toLocaleString('en-US')} / year`
-                                                    : `Rp ${(activeItemDetails.biaya_pendaftaran || 150000).toLocaleString('id-ID')}` }}
+                                                {{ selectedProgram.type === 'Scholarship Content'
+                                                    ? `Rp ${(selectedProgram.nominal_dana || selectedProgram.nominal || 0).toLocaleString('id-ID')}`
+                                                    : `Rp ${(selectedProgram.biaya_pendaftaran || selectedProgram.biaya || 0).toLocaleString('id-ID')}` }}
                                             </span>
                                         </div>
                                         <div class="flex justify-between">
-                                            <span class="text-slate-400">Eligibility</span>
-                                            <span class="text-slate-700">
-                                                {{ activeItem.type === 'Scholarship Content' 
-                                                    ? (activeItemDetails.tipe_beasiswa || 'Post-graduate') 
-                                                    : (activeItemDetails.tipe_lomba || 'Akademik') }}
-                                            </span>
+                                            <span class="text-slate-400">Tipe</span>
+                                            <span class="text-slate-700">{{ selectedProgram.tipe_beasiswa || selectedProgram.tipe_lomba || selectedProgram.tipe || selectedProgram.type }}</span>
                                         </div>
                                         <div class="flex justify-between">
-                                            <span class="text-slate-400">Quota</span>
-                                            <span class="text-slate-700">
-                                                {{ activeItem.type === 'Scholarship Content' 
-                                                    ? activeItemDetails.kuota_pendaftar 
-                                                    : activeItemDetails.kuota }} slots
-                                            </span>
+                                            <span class="text-slate-400">Kuota</span>
+                                            <span class="text-slate-700">{{ selectedProgram.kuota_pendaftar || selectedProgram.kuota || selectedProgram.quota || '-' }} slots</span>
                                         </div>
-                                    </div>
-
-                                    <!-- Hero Image Preview -->
-                                    <div class="pt-3">
-                                        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Hero Image Preview</span>
-                                        <div class="aspect-[16/8] rounded-xl bg-slate-50 border border-slate-100 overflow-hidden relative flex items-center justify-center">
-                                            <img src="/images/hero_student.png" alt="Preview" class="w-full h-full object-cover opacity-80" />
-                                            <span class="absolute bottom-2 left-2 px-2.5 py-0.5 rounded bg-slate-900/60 text-white text-[9px] font-bold backdrop-blur-sm">
-                                                Hero Image Preview
-                                            </span>
+                                        <div class="flex justify-between">
+                                            <span class="text-slate-400">Link Info</span>
+                                            <a :href="selectedProgram.link_informasi || selectedProgram.link || selectedProgram.info_link" target="_blank" class="text-purple-600 hover:underline truncate max-w-[120px]">
+                                                {{ selectedProgram.link_informasi || selectedProgram.link || 'Lihat Website ↗' }}
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- Description Excerpt -->
-                                <div class="space-y-4 flex flex-col justify-between">
-                                    <div class="space-y-3">
-                                        <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400">Description Excerpt</h4>
-                                        <div class="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
-                                            <p class="text-xs leading-relaxed text-slate-500 font-semibold text-justify">
-                                                {{ activeItemDetails.deskripsi }}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div class="pt-4">
-                                        <a :href="activeItemDetails.link_informasi" target="_blank" class="inline-flex items-center gap-1.5 text-xs font-bold text-purple-600 hover:text-purple-750 hover:underline">
-                                            Read full submission
-                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                            </svg>
-                                        </a>
+                                <!-- Description -->
+                                <div class="space-y-4">
+                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400">Deskripsi Program</h4>
+                                    <div class="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
+                                        <p class="text-xs leading-relaxed text-slate-500 font-semibold text-justify whitespace-pre-wrap">{{ selectedProgram.deskripsi || selectedProgram.description || 'Deskripsi tidak tersedia.' }}</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Actions Row -->
-                            <div class="flex flex-col sm:flex-row gap-4 pt-2">
-                                <button 
-                                    type="button" 
-                                    @click="handleApprove"
-                                    :disabled="isActioning"
-                                    class="w-full sm:w-1/2 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
+                            <!-- Action Row: 3 buttons -->
+                            <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                                <button type="button" @click="handleApprove" :disabled="isActioning"
+                                    class="flex-1 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                     Approve Program
                                 </button>
-                                <button 
-                                    type="button" 
-                                    @click="showRevisionModal = true"
-                                    :disabled="isActioning"
-                                    class="w-full sm:w-1/2 py-3.5 px-4 bg-white hover:bg-red-50 text-red-650 hover:text-red-700 disabled:opacity-50 rounded-2xl border border-red-200 hover:border-red-300 transition flex items-center justify-center gap-2 cursor-pointer font-bold text-xs"
-                                >
-                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
+                                <button type="button" @click="showRevisionModal = true" :disabled="isActioning"
+                                    class="flex-1 py-3.5 px-4 bg-white hover:bg-amber-50 text-amber-700 disabled:opacity-50 rounded-2xl border border-amber-200 hover:border-amber-300 transition flex items-center justify-center gap-2 cursor-pointer font-bold text-xs">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                     Request Revision
+                                </button>
+                                <button type="button" @click="openRejectModal" :disabled="isActioning"
+                                    class="flex-1 py-3.5 px-4 bg-white hover:bg-red-50 text-red-700 disabled:opacity-50 rounded-2xl border border-red-200 hover:border-red-300 transition flex items-center justify-center gap-2 cursor-pointer font-bold text-xs">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                    Reject Program
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right Panel: Queue List & Guidelines -->
+                <!-- Right Panel -->
                 <div class="lg:col-span-4 space-y-6">
-                    
-                    <!-- Queue List -->
+                    <!-- Queue List (oldest first) -->
                     <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
                         <div class="flex justify-between items-center pb-2">
-                            <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider">Queue ({{ Math.max(0, queue.length - 1) }} more)</h3>
+                            <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider">Queue ({{ pendingCount }})</h3>
                         </div>
-
-                        <div class="space-y-2.5 overflow-y-auto max-h-[220px] pr-1">
-                            <div v-for="item in queue" :key="item.id" 
+                        <div class="space-y-2.5 overflow-y-auto max-h-[280px] pr-1">
+                            <div v-if="sortedQueue.length === 0" class="py-6 text-center text-xs font-bold text-slate-400">Seluruh antrean program telah selesai dikurasi. Belum ada program baru masuk.</div>
+                            <div v-for="item in sortedQueue" :key="item.id"
                                 @click="selectItem(item)"
                                 class="p-3.5 border rounded-2xl cursor-pointer transition duration-150 flex items-center justify-between text-left group"
-                                :class="activeItem?.id === item.id 
-                                    ? 'bg-purple-50/50 border-purple-250 shadow-sm' 
-                                    : 'border-slate-100 hover:bg-slate-50/50 hover:border-slate-200'"
-                            >
+                                :class="activeItem?.id === item.id ? 'bg-purple-50/50 border-purple-200 shadow-sm' : 'border-slate-100 hover:bg-slate-50/50 hover:border-slate-200'">
                                 <div class="flex items-center gap-3">
-                                    <div class="h-8.5 w-8.5 rounded-xl flex items-center justify-center font-bold text-xs shadow-inner"
-                                        :class="item.type === 'Scholarship Content' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'"
-                                    >
+                                    <div class="h-8 w-8 rounded-xl flex items-center justify-center font-bold text-xs shadow-inner"
+                                        :class="item.type === 'Scholarship Content' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'">
                                         {{ item.name.charAt(0) }}
                                     </div>
                                     <div class="space-y-0.5">
                                         <p class="text-xs font-bold text-slate-800 truncate max-w-[150px] leading-tight">{{ item.name }}</p>
-                                        <p class="text-[9px] font-semibold text-slate-400">Submitted: {{ item.submission_date }}</p>
+                                        <div class="flex items-center gap-1.5">
+                                            <p class="text-[9px] font-semibold text-slate-400">Submitted: {{ item.submitted_at }}</p>
+                                            <span v-if="item.status === 'pending-resubmit'" class="text-[8px] font-black text-orange-600 bg-orange-50 px-1 rounded">Re-submit</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <svg class="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                                </svg>
+                                <svg class="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                             </div>
                         </div>
                     </div>
 
-                    <!-- AI Analysis Engine Guidelines Card -->
-                    <div class="bg-gradient-to-br from-indigo-900 to-purple-900 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden space-y-4">
-                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,#9333ea,transparent_55%)] opacity-50"></div>
-                        
-                        <div class="relative z-10 text-left">
-                            <span class="text-[10px] font-black text-indigo-200 uppercase tracking-widest block">AI Matching Index</span>
-                            <div class="flex items-center gap-3 mt-2">
-                                <div class="text-3xl font-black text-white leading-tight">
-                                    {{ isAnalyzingAI ? 'Analyzing...' : `${aiScore}%` }}
-                                </div>
-                                <span class="px-2 py-0.5 rounded-full text-[9px] font-bold"
-                                    :class="aiScore > 75 ? 'bg-emerald-500/25 text-emerald-200' : 'bg-amber-500/25 text-amber-200'"
-                                >
-                                    {{ aiScore > 75 ? 'High Quality' : 'Needs Review' }}
-                                </span>
-                            </div>
-                            
-                            <div class="mt-4 pt-4 border-t border-white/10 space-y-2">
-                                <p class="text-[10px] font-bold uppercase text-indigo-200 tracking-wider">AI Evaluation Feedback</p>
-                                <div v-if="isAnalyzingAI" class="space-y-1.5">
-                                    <div class="h-3 w-3/4 bg-white/15 rounded animate-pulse"></div>
-                                    <div class="h-3 w-1/2 bg-white/15 rounded animate-pulse"></div>
-                                </div>
-                                <ul v-else class="space-y-1.5 text-xs text-white/80 font-medium">
-                                    <li v-for="(f, i) in aiFeedback" :key="i" class="flex items-start gap-1.5">
-                                        <span class="text-indigo-400">✦</span> {{ f }}
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Review Guidelines Checklist -->
+                    <!-- Review Guidelines -->
                     <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
                         <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider text-left">Review Guidelines</h4>
                         <p class="text-[11px] font-semibold text-slate-450 leading-relaxed text-justify">
-                            Ensure all submissions meet ScholarPath's premium academic standards.
+                            Pastikan semua submission memenuhi standar akademik premium ScholarPath.
                         </p>
-                        
                         <div class="space-y-2.5 text-xs text-slate-700 font-bold">
                             <div class="flex items-center gap-2.5">
                                 <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
@@ -544,111 +380,82 @@ onMounted(() => {
                             </div>
                             <div class="flex items-center gap-2.5">
                                 <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
-                                <span>No Spelled Errors</span>
+                                <span>No Spelling Errors</span>
                             </div>
                             <div class="flex items-center gap-2.5">
                                 <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
-                                <span>High-Res Media Included</span>
+                                <span>Media & Links Valid</span>
+                            </div>
+                            <div class="flex items-center gap-2.5">
+                                <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
+                                <span>Persyaratan Dokumen Lengkap</span>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom Stats matrix row -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
-                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
-                        ✓
-                    </div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Approved Today</span>
-                        <p class="text-sm font-black text-slate-850">24 items</p>
-                    </div>
-                </div>
-
-                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm shrink-0">
-                        🕒
-                    </div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Avg. Wait Time</span>
-                        <p class="text-sm font-black text-slate-850">4.2 hours</p>
-                    </div>
-                </div>
-
-                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-red-50 text-red-650 flex items-center justify-center font-bold text-sm shrink-0">
-                        ⚠
-                    </div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Revision Rate</span>
-                        <p class="text-sm font-black text-slate-850">12% rate</p>
-                    </div>
-                </div>
-
-                <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">
-                        📈
-                    </div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Total Active</span>
-                        <p class="text-sm font-black text-slate-850">842 items</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Compose Revision Modal -->
+        <!-- Modal: Request Revision -->
         <transition name="fade">
             <div v-if="showRevisionModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
                 <div class="absolute inset-0" @click="showRevisionModal = false"></div>
                 <div class="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-lg w-full relative z-10 animate-scale text-left">
                     <div class="flex justify-between items-start mb-6">
-                        <h3 class="text-lg font-black text-slate-800">Ajukan Umpan Balik Revisi</h3>
-                        <button type="button" @click="showRevisionModal = false" class="text-slate-400 hover:text-slate-600 transition text-xl">&times;</button>
+                        <h3 class="text-lg font-black text-slate-800">Ajukan Permintaan Revisi</h3>
+                        <button type="button" @click="showRevisionModal = false" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
                     </div>
-
                     <form @submit.prevent="handleRequestRevision" class="space-y-4">
                         <div>
                             <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Program Target</label>
-                            <input
-                                type="text"
-                                :value="activeItem?.name"
-                                disabled
-                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-500 font-bold"
-                            />
+                            <input type="text" :value="activeItem?.name" disabled class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-500 font-bold"/>
                         </div>
-
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Keterangan / Instruksi Revisi</label>
-                            <textarea
-                                v-model="revisionFeedback"
-                                required
-                                rows="5"
-                                placeholder="Jelaskan bagian mana saja yang perlu direvisi atau diperbaiki oleh pihak instansi..."
-                                class="w-full px-4 py-2.5 border border-slate-150 focus:border-purple-500 rounded-xl text-xs text-slate-855 transition outline-none resize-none"
-                            ></textarea>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Instruksi Revisi untuk Instansi</label>
+                            <textarea v-model="revisionFeedback" required rows="5" placeholder="Jelaskan bagian apa yang perlu direvisi..." class="w-full px-4 py-2.5 border border-slate-150 focus:border-purple-500 rounded-xl text-xs text-slate-800 transition outline-none resize-none"></textarea>
                         </div>
-
-                        <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-50">
-                            <button
-                                type="button"
-                                @click="showRevisionModal = false"
-                                class="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-2xl border transition cursor-pointer"
-                            >
-                                Batal
+                        <div class="flex gap-3 pt-4 border-t border-slate-50">
+                            <button type="button" @click="showRevisionModal = false" class="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-2xl border transition cursor-pointer">Batal</button>
+                            <button type="submit" :disabled="isActioning" class="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow transition cursor-pointer">
+                                <svg v-if="isActioning" class="animate-spin h-4 w-4 text-white mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <span v-else>Kirim Permintaan Revisi</span>
                             </button>
-                            <button
-                                type="submit"
-                                :disabled="isActioning"
-                                class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow transition cursor-pointer flex items-center justify-center gap-2"
-                            >
-                                <svg v-if="isActioning" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Kirim Permintaan Revisi
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </transition>
+
+        <!-- Modal: Reject Program -->
+        <transition name="fade">
+            <div v-if="showRejectModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+                <div class="absolute inset-0" @click="showRejectModal = false"></div>
+                <div class="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-lg w-full relative z-10 animate-scale text-left">
+                    <div class="flex justify-between items-start mb-6">
+                        <h3 class="text-lg font-black text-slate-800">Tolak Program</h3>
+                        <button type="button" @click="showRejectModal = false" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                    </div>
+                    <form @submit.prevent="handleReject" class="space-y-4">
+                        <div>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Program Target</label>
+                            <input type="text" :value="activeItem?.name" disabled class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-500 font-bold"/>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Judul Alasan Penolakan *</label>
+                            <input type="text" v-model="rejectTitle" required placeholder="Contoh: Informasi Tidak Lengkap" class="w-full px-4 py-2.5 border border-slate-150 focus:border-red-400 rounded-xl text-xs text-slate-800 transition outline-none"/>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Deskripsi Penolakan *</label>
+                            <textarea v-model="rejectDesc" required rows="4" placeholder="Jelaskan alasan penolakan program ini secara detail..." class="w-full px-4 py-2.5 border border-slate-150 focus:border-red-400 rounded-xl text-xs text-slate-800 transition outline-none resize-none"></textarea>
+                        </div>
+                        <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">
+                            ⚠ Program yang ditolak akan dihapus dari antrean dan instansi akan menerima notifikasi penolakan.
+                        </div>
+                        <div class="flex gap-3 pt-4 border-t border-slate-50">
+                            <button type="button" @click="showRejectModal = false" class="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-2xl border transition cursor-pointer">Batal</button>
+                            <button type="submit" :disabled="isActioning" class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow transition cursor-pointer">
+                                <svg v-if="isActioning" class="animate-spin h-4 w-4 text-white mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <span v-else>Konfirmasi Tolak Program</span>
                             </button>
                         </div>
                     </form>

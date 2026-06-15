@@ -155,11 +155,11 @@ const previewProfile = () => {
         <transition name="toast">
             <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-xs font-bold transition-all duration-300 animate-slideDown"
                 :class="{
-                    'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success',
-                    'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error'
+                    'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60': messageToast.type === 'success',
+                    'bg-red-50 dark:bg-red-900/40 text-red-800 dark:text-red-400 border-red-100 dark:border-red-800/60': messageToast.type === 'error'
                 }"
             >
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
+                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 dark:bg-emerald-600 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
                 {{ messageToast.text }}
             </div>
         </transition>
@@ -171,11 +171,11 @@ const previewProfile = () => {
                 <!-- Page Header with Save Button -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div class="space-y-1">
-                        <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Profil Instansi</h1>
-                        <p class="text-xs font-semibold text-slate-500">Kelola identitas dan informasi publik instansi Anda.</p>
+                        <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Profil Instansi</h1>
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Kelola identitas dan informasi publik instansi Anda.</p>
                     </div>
                     <div class="flex items-center gap-3 self-start sm:self-auto">
-                        <button type="button" @click="previewProfile" class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl shadow-sm transition cursor-pointer">
+                        <button type="button" @click="previewProfile" class="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl shadow-sm transition cursor-pointer">
                             Preview Profil
                         </button>
                         <button
@@ -199,35 +199,35 @@ const previewProfile = () => {
                     <div class="lg:col-span-8 space-y-6">
                         
                         <!-- Identitas Instansi Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-5">
-                            <h3 class="text-sm font-black text-slate-800 border-b border-slate-50 pb-2.5 uppercase tracking-wide">Identitas Instansi</h3>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5">
+                            <h3 class="text-sm font-black text-slate-800 dark:text-white border-b border-slate-50 dark:border-slate-800/60 pb-2.5 uppercase tracking-wide">Identitas Instansi</h3>
                             
                             <div class="flex flex-col sm:flex-row gap-5 items-start">
                                 <!-- Logo container box -->
-                                <div class="h-20 w-20 rounded-2xl bg-slate-50 border border-slate-150 flex items-center justify-center text-2xl shrink-0 group relative overflow-hidden">
+                                <div class="h-20 w-20 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 flex items-center justify-center text-2xl shrink-0 group relative overflow-hidden">
                                     🏢
                                 </div>
                                 <div class="space-y-4 w-full">
                                     <!-- Nama Instansi -->
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Nama Instansi</label>
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Nama Instansi</label>
                                         <input
                                             type="text"
                                             v-model="nama"
                                             required
                                             placeholder="Contoh: Universitas Teknologi Nusantara"
-                                            class="w-full px-4 py-3 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                         />
                                     </div>
                                     
                                     <!-- Deskripsi Instansi -->
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Deskripsi Instansi</label>
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Deskripsi Instansi</label>
                                         <textarea
                                             v-model="deskripsi"
                                             rows="4"
                                             placeholder="Tulis profil singkat instansi Anda..."
-                                            class="w-full px-4 py-3 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none resize-none"
+                                            class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none resize-none"
                                         ></textarea>
                                     </div>
                                 </div>
@@ -235,36 +235,36 @@ const previewProfile = () => {
                         </div>
 
                         <!-- Kontak Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                            <h3 class="text-sm font-black text-slate-800 border-b border-slate-50 pb-2.5 uppercase tracking-wide">Kontak</h3>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                            <h3 class="text-sm font-black text-slate-800 dark:text-white border-b border-slate-50 dark:border-slate-800/60 pb-2.5 uppercase tracking-wide">Kontak</h3>
                             
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <!-- Email Resmi -->
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Email Resmi</label>
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Email Resmi</label>
                                     <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 text-xs pointer-events-none">✉</span>
+                                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500 text-xs pointer-events-none">✉</span>
                                         <input
                                             type="email"
                                             v-model="emailResmi"
                                             required
                                             placeholder="info@instansi.ac.id"
-                                            class="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                            class="w-full pl-9 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                         />
                                     </div>
                                 </div>
 
                                 <!-- Nomor Telepon -->
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Nomor Telepon</label>
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Nomor Telepon</label>
                                     <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 text-xs pointer-events-none">📞</span>
+                                        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500 text-xs pointer-events-none">📞</span>
                                         <input
                                             type="text"
                                             v-model="nomorTelepon"
                                             required
                                             placeholder="+62 21 555 1234"
-                                            class="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                            class="w-full pl-9 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                         />
                                     </div>
                                 </div>
@@ -272,43 +272,43 @@ const previewProfile = () => {
 
                             <!-- Website -->
                             <div>
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Website</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Website</label>
                                 <div class="relative">
-                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 text-xs pointer-events-none">🌐</span>
+                                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 dark:text-slate-500 text-xs pointer-events-none">🌐</span>
                                     <input
                                         type="text"
                                         v-model="website"
                                         placeholder="www.instansi.ac.id"
-                                        class="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                        class="w-full pl-9 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                     />
                                 </div>
                             </div>
                         </div>
 
                         <!-- Lokasi Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                            <h3 class="text-sm font-black text-slate-800 border-b border-slate-50 pb-2.5 uppercase tracking-wide">Lokasi</h3>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
+                            <h3 class="text-sm font-black text-slate-800 dark:text-white border-b border-slate-50 dark:border-slate-800/60 pb-2.5 uppercase tracking-wide">Lokasi</h3>
                             
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                 <!-- Alamat Kantor Pusat -->
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Alamat Kantor Pusat</label>
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Alamat Kantor Pusat</label>
                                     <textarea
                                         v-model="alamat"
                                         rows="4"
                                         placeholder="Jalan, Gedung, Kota, Provinsi, Kode Pos..."
-                                        class="w-full px-4 py-3 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none resize-none"
+                                        class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none resize-none"
                                     ></textarea>
                                 </div>
                                 
                                 <!-- Map Preview box -->
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">Peta Lokasi</label>
-                                    <div class="h-28 rounded-2xl bg-slate-100 border border-slate-150 flex flex-col items-center justify-center gap-1.5 text-slate-400 text-xs font-bold relative overflow-hidden group">
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1.5">Peta Lokasi</label>
+                                    <div class="h-28 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 flex flex-col items-center justify-center gap-1.5 text-slate-400 dark:text-slate-500 text-xs font-bold relative overflow-hidden group">
                                         <!-- Styled mockup map graphic -->
-                                        <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                                        <div class="absolute inset-0 opacity-10 dark:opacity-[0.05] bg-[radial-gradient(#000_1px,transparent_1px)] dark:bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
                                         <span class="text-xl">🗺️</span>
-                                        <span class="group-hover:text-indigo-600 transition">Lihat Peta</span>
+                                        <span class="group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">Lihat Peta</span>
                                     </div>
                                 </div>
                             </div>
@@ -319,86 +319,86 @@ const previewProfile = () => {
                     <div class="lg:col-span-4 space-y-6">
                         
                         <!-- Status Verifikasi Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
                             <div class="flex justify-between items-center">
-                                <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Status Verifikasi</span>
+                                <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Status Verifikasi</span>
                                 <span class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide"
-                                    :class="isVerified ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'"
+                                    :class="isVerified ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/50' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-800/50'"
                                 >
                                     {{ isVerified ? 'TERVERIFIKASI' : 'BELUM VERIFIKASI' }}
                                 </span>
                             </div>
-                            <p class="text-xs text-slate-500 font-semibold leading-relaxed">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
                                 {{ isVerified 
                                     ? 'Akun instansi Anda telah diverifikasi oleh tim ScholarPath. Semua program yang Anda publikasikan akan tampil dengan badge verifikasi.' 
                                     : 'Akun Anda sedang dalam proses verifikasi. Beberapa fitur mungkin dibatasi sebelum verifikasi dokumen selesai.' }}
                             </p>
-                            <a href="#" class="inline-flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 transition">
+                            <a href="#" class="inline-flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition">
                                 <span>📄 Dokumen Legalitas OK</span>
-                                <span class="text-[9px] text-slate-400 font-normal">(Terverifikasi)</span>
+                                <span class="text-[9px] text-slate-400 dark:text-slate-500 font-normal">(Terverifikasi)</span>
                             </a>
                         </div>
 
                         <!-- Tampilan bagi Pelamar Preview Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-4 text-left">
-                            <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400">Tampilan bagi Pelamar</h4>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                            <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Tampilan bagi Pelamar</h4>
                             
                             <!-- Card Preview -->
-                            <div class="border border-slate-150 rounded-2xl p-4 space-y-3.5 shadow-sm bg-slate-50/20">
+                            <div class="border border-slate-150 dark:border-slate-800/60 rounded-2xl p-4 space-y-3.5 shadow-sm bg-slate-50/20 dark:bg-slate-800/30">
                                 <div class="flex items-center gap-3">
-                                    <div class="h-10 w-10 rounded-xl bg-slate-100 border border-slate-150 flex items-center justify-center text-lg">
+                                    <div class="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 flex items-center justify-center text-lg">
                                         🏢
                                     </div>
                                     <div>
-                                        <h5 class="text-xs font-extrabold text-slate-800 leading-snug">{{ nama || 'Nama Instansi Anda' }}</h5>
-                                        <p class="text-[9px] font-bold text-slate-400">Institusi Terverifikasi</p>
+                                        <h5 class="text-xs font-extrabold text-slate-800 dark:text-slate-200 leading-snug">{{ nama || 'Nama Instansi Anda' }}</h5>
+                                        <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500">Institusi Terverifikasi</p>
                                     </div>
                                 </div>
-                                <p class="text-[11px] text-slate-500 font-medium leading-relaxed line-clamp-2">
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed line-clamp-2">
                                     {{ deskripsi || 'Deskripsi profil singkat instansi Anda akan ditampilkan di sini untuk menarik pelamar berkualitas.' }}
                                 </p>
                                 
                                 <!-- Progress completeness -->
                                 <div class="space-y-1">
                                     <div class="flex justify-between items-center text-[9px] font-black">
-                                        <span class="text-indigo-600">{{ profileCompleteness }}% Kelengkapan Profil</span>
+                                        <span class="text-indigo-600 dark:text-indigo-400">{{ profileCompleteness }}% Kelengkapan Profil</span>
                                     </div>
-                                    <div class="w-full bg-slate-150 h-1 rounded-full overflow-hidden">
-                                        <div class="bg-indigo-600 h-full transition-all duration-300" :style="{ width: profileCompleteness + '%' }"></div>
+                                    <div class="w-full bg-slate-150 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-indigo-600 dark:bg-indigo-500 h-full transition-all duration-300" :style="{ width: profileCompleteness + '%' }"></div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Media Sosial Card -->
-                        <div class="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-4 text-left">
-                            <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400">Media Sosial</h4>
+                        <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 text-left">
+                            <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Media Sosial</h4>
                             
                             <div class="space-y-3">
                                 <!-- Instagram -->
                                 <div>
-                                    <label class="text-[9px] font-bold text-slate-400 block mb-1">Instagram URL</label>
+                                    <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 block mb-1">Instagram URL</label>
                                     <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[10px] font-black text-slate-400 pointer-events-none">IG</span>
+                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[10px] font-black text-slate-400 dark:text-slate-500 pointer-events-none">IG</span>
                                         <input
                                             type="text"
                                             v-model="instagram"
                                             placeholder="instagram.com/akun"
-                                            class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                            class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                         />
                                     </div>
                                 </div>
 
                                 <!-- LinkedIn -->
                                 <div>
-                                    <label class="text-[9px] font-bold text-slate-400 block mb-1">LinkedIn URL</label>
+                                    <label class="text-[9px] font-bold text-slate-400 dark:text-slate-500 block mb-1">LinkedIn URL</label>
                                     <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[10px] font-black text-slate-400 pointer-events-none">LN</span>
+                                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-[10px] font-black text-slate-400 dark:text-slate-500 pointer-events-none">LN</span>
                                         <input
                                             type="text"
                                             v-model="linkedin"
                                             placeholder="linkedin.com/company/nama"
-                                            class="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-indigo-500 rounded-xl text-xs text-slate-800 placeholder-slate-400 transition outline-none"
+                                            class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-150 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                                         />
                                     </div>
                                 </div>

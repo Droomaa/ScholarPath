@@ -1,10 +1,19 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sklearn.metrics.pairwise import cosine_similarity
 # Import kelas canggih dari ai_matcher_fix.py
 from ai_matcher_fix import ScholarPathMatcher
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 print("⏳ Sedang memuat Dataset, BM25, dan Model NLP dari ai_matcher_fix... (Tunggu sebentar)")
 API_KEY = "AIzaSyDzz1MW6DYV5VWzC9e_wYZqX-VSTs0ec0Y" 
@@ -18,6 +27,7 @@ class MatchRequest(BaseModel):
     beasiswa_requirement: str = None    # Ditambahkan agar kompatibel dengan Golang lama
     filter_type: str = None
     top_k: int = 3
+    live_programs: list = []            # Bypass auth Go backend
 
 @app.post("/api/match")
 def calculate_match(data: MatchRequest):
@@ -45,7 +55,7 @@ def calculate_match(data: MatchRequest):
             }
 
         # =====================================================================
-        # SKENARIO B: GOLANG BARU / FRONTEND DIRECT (Mencari Top K dari CSV)
+        # SKENARIO B: GOLANG BARU / FRONTEND DIRECT (Mencari Top K dari CSV & Live Data)
         # =====================================================================
         query_text = data.user_skill if data.user_skill else data.user_profile
         if not query_text:
@@ -53,6 +63,7 @@ def calculate_match(data: MatchRequest):
             
         results_df = matcher.search(
             query=query_text,
+            live_programs=data.live_programs,
             top_k=data.top_k,
             filter_type=data.filter_type
         )
