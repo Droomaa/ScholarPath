@@ -26,14 +26,17 @@ type UserPreference struct {
 }
 
 type Instansi struct {
-	ID         uint      `gorm:"primaryKey;column:id" json:"id"`
-	UserID     *uint     `gorm:"column:user_id" json:"user_id"`
-	Nama       string    `gorm:"column:nama" json:"nama"`
-	Alamat     string    `gorm:"column:alamat" json:"alamat"`
-	Kontak     string    `gorm:"column:kontak" json:"kontak"`
-	IsVerified bool      `json:"is_verified" gorm:"default:false"`
-	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt  time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	ID            uint      `gorm:"primaryKey;column:id" json:"id"`
+	UserID        *uint     `gorm:"column:user_id" json:"user_id"`
+	Nama          string    `gorm:"column:nama" json:"nama"`
+	Alamat        string    `gorm:"column:alamat" json:"alamat"`
+	Kontak        string    `gorm:"column:kontak" json:"kontak"`
+	IsVerified    bool      `json:"is_verified" gorm:"default:false"`
+	Status        string    `gorm:"column:status;default:'pending'" json:"status"`
+	SKDocument    string    `gorm:"column:sk_document" json:"sk_document"`
+	LegalDocument string    `gorm:"column:legal_document" json:"legal_document"`
+	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 // ==========================================

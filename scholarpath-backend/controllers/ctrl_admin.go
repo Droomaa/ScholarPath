@@ -44,8 +44,24 @@ func VerifyInstansi(c *gin.Context) {
 		return
 	}
 
-	// Ubah status menjadi true
-	instansi.IsVerified = true
+	var payload struct {
+		Status string `json:"status"`
+		Reason string `json:"reason"`
+	}
+	
+	if err := c.ShouldBindJSON(&payload); err == nil && payload.Status != "" {
+		instansi.Status = payload.Status
+		if payload.Status == "approved" {
+			instansi.IsVerified = true
+		} else {
+			instansi.IsVerified = false
+		}
+	} else {
+		// Default backward compatibility jika payload kosong
+		instansi.IsVerified = true
+		instansi.Status = "approved"
+	}
+
 	koneksi.DB.Save(&instansi)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Akun Instansi berhasil diverifikasi", "data": instansi})

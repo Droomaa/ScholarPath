@@ -11,7 +11,8 @@ const user = ref({
     email: '',
     jenjang_id: null,
     keahlian: '',
-    role: localStorage.getItem('auth_role') || 'student'
+    role: localStorage.getItem('auth_role') || 'student',
+    status: 'active'
 });
 
 const isSubmittingAction = ref(false);
@@ -409,6 +410,41 @@ const fetchInstansiDashboard = async () => {
     }
 };
 
+const reapplyForm = ref({
+    file_sk: null,
+    file_nib: null
+});
+const isSubmittingReapply = ref(false);
+
+const submitReapply = async () => {
+    if (!reapplyForm.value.file_sk || !reapplyForm.value.file_nib) {
+        showToast('Mohon lengkapi kedua dokumen (SK Izin & NIB)', 'warning');
+        return;
+    }
+    isSubmittingReapply.value = true;
+    try {
+        const token = getAuthToken();
+        const formData = new FormData();
+        formData.append('file_sk', reapplyForm.value.file_sk);
+        formData.append('file_nib', reapplyForm.value.file_nib);
+        
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        await axios.post(`${backendUrl}/institution/upload-verification`, formData, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        showToast('Berkas berhasil dikirim ulang! Menunggu verifikasi admin.');
+        user.value.status = 'pending';
+    } catch (e) {
+        showToast('Gagal mengirim berkas. Pastikan ukuran di bawah 2MB.', 'error');
+        console.error('Upload error:', e);
+    } finally {
+        isSubmittingReapply.value = false;
+    }
+};
+
 onMounted(async () => {
     const token = getAuthToken();
     if (!token) return;
@@ -463,6 +499,51 @@ onMounted(async () => {
         <!-- A. INSTITUTION (INSTANSI) DASHBOARD VIEW -->
         <!-- ======================================================= -->
         <div v-if="user.role === 'instansi' || user.role === 'admin'" class="space-y-8">
+            <template v-if="user.status === 'pending'">
+                <!-- Show Pending state -->
+                <div class="bg-amber-50 dark:bg-amber-900/30 p-8 rounded-3xl text-center space-y-4">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-600 mb-2">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-amber-800 dark:text-amber-300">Menunggu Verifikasi Admin</h2>
+                    <p class="text-amber-700 dark:text-amber-400 font-medium">Akun Anda sedang dalam proses verifikasi oleh pihak Admin. Mohon tunggu dalam waktu 1x24 jam. Menu fitur Anda akan terbuka otomatis setelah disetujui.</p>
+                </div>
+            </template>
+
+            <template v-else-if="user.status === 'rejected'">
+                <!-- Show Rejected state & upload form -->
+                <div class="bg-red-50 dark:bg-red-900/30 p-8 rounded-3xl text-center space-y-6">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/50 text-red-600 mb-2">
+                        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-red-800 dark:text-red-300">Pendaftaran Akun Ditolak</h2>
+                    <p class="text-red-700 dark:text-red-400 font-medium max-w-2xl mx-auto">Pendaftaran Akun Anda Ditolak oleh Admin. Silakan periksa kembali legalitas Anda dan ajukan ulang berkas yang valid.</p>
+                    
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-red-100 dark:border-red-900/30 max-w-xl mx-auto mt-8 text-left">
+                        <h3 class="text-lg font-black text-slate-800 dark:text-white mb-6">Upload Ulang Dokumen</h3>
+                        <form @submit.prevent="submitReapply" class="space-y-5">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">SK Izin Operasional (PDF, Max 2MB)</label>
+                                <input type="file" accept=".pdf" @change="e => reapplyForm.file_sk = e.target.files[0]" class="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-slate-700 dark:file:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Dokumen Legalitas NIB (PDF, Max 2MB)</label>
+                                <input type="file" accept=".pdf" @change="e => reapplyForm.file_nib = e.target.files[0]" class="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-slate-700 dark:file:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl" required />
+                            </div>
+                            <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl mt-6 shadow-md transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2" :disabled="isSubmittingReapply">
+                                <svg v-if="isSubmittingReapply" class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <span>{{ isSubmittingReapply ? 'Mengunggah...' : 'Kirim Ulang Berkas Verifikasi' }}</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </template>
+
+            <template v-else>
             <!-- Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
@@ -669,6 +750,7 @@ onMounted(async () => {
                         </div>
                     </div>
                 </div>
+            </template>
             </template>
         </div>
 

@@ -71,6 +71,8 @@ func SetupRouter() *gin.Engine {
 		protected.DELETE("/jenjang/:id", controllers.DeleteJenjang)
 
 		// Instansi
+		protected.GET("/instansi/me", controllers.GetMyInstansi)     // Profil instansi by token
+		protected.POST("/instansi/upload-docs", controllers.UploadVerificationDocs) // Upload 2 PDF verifikasi
 		protected.GET("/instansi", controllers.GetAllInstansi)
 		protected.GET("/instansi/:id", controllers.GetInstansiByID)
 		protected.PUT("/instansi/:id", controllers.UpdateInstansi)

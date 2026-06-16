@@ -47,10 +47,21 @@ class HandleInertiaRequests extends Middleware
             $goToken = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
         }
 
+        $userArray = $user ? $user->toArray() : null;
+        if ($user && $user->role === 'instansi') {
+            $instansi = \Illuminate\Support\Facades\DB::table('instansis')->where('user_id', $user->id)->first();
+            if ($instansi) {
+                $userArray['instansi_id'] = $instansi->id;
+                $userArray['is_verified'] = $instansi->is_verified;
+                $userArray['status'] = $instansi->status ?? 'pending';
+                $userArray['has_uploaded_docs'] = (!empty($instansi->sk_document) && !empty($instansi->legal_document));
+            }
+        }
+
         return [
             ...parent::share($request),
             'auth' => [
-                'user' => $user,
+                'user' => $userArray,
                 'go_token' => $goToken,
             ],
         ];

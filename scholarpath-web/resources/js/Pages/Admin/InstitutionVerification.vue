@@ -87,10 +87,13 @@ onMounted(async () => {
         if (res.data?.data?.length) {
             institutions.value = res.data.data.map((i, idx) => ({
                 ...i,
-                registered_at: daysAgo(idx * 2 + 1),
-                sk_file: `SK_${i.nama?.replace(/ /g, '_') || 'Instansi'}.pdf`,
-                mitra_file: `Mitra_${i.nama?.replace(/ /g, '_') || 'Instansi'}.pdf`,
-                request_id: `INST-${String(i.id).padStart(4, '0')}`
+                registered_at: i.registered_at || daysAgo(idx * 2 + 1),
+                // Prefer real file fields from backend; fallback to generated name for display
+                sk_document:     i.sk_document     || '',
+                legal_document:  i.legal_document  || '',
+                sk_file:         i.sk_document     || `SK_${i.nama?.replace(/ /g, '_') || 'Instansi'}.pdf`,
+                mitra_file:      i.legal_document  || `Mitra_${i.nama?.replace(/ /g, '_') || 'Instansi'}.pdf`,
+                request_id:      `INST-${String(i.id).padStart(4, '0')}`
             }));
         }
     } catch (e) { /* use local mock */ }
@@ -98,18 +101,27 @@ onMounted(async () => {
 
 // ACCEPT
 const handleAccept = async (inst) => {
+    // Guardrail: jangan bisa accept jika dokumen belum ada
+    if (!inst.sk_document || !inst.legal_document) {
+        showToast('Berkas dokumen instansi belum lengkap. Tidak bisa diverifikasi!', 'error');
+        return;
+    }
     isActioning.value = true;
     const token = getAuthToken();
     try {
         const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        await axios.put(`${backendUrl}/admin/verify/instansi/${inst.id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
-    } catch (e) { /* local fallback */ }
-
-    inst.is_verified = true;
-    inst.verified_by = `Admin — Hari ini`;
-    verifiedToday.value++;
-    showToast(`Institusi "${inst.nama}" berhasil diverifikasi dan diaktifkan!`, 'success');
-    isActioning.value = false;
+        await axios.put(`${backendUrl}/admin/verify/instansi/${inst.id}`, { status: 'approved' }, { headers: { Authorization: `Bearer ${token}` } });
+        inst.is_verified = true;
+        inst.status = 'approved';
+        inst.verified_by = `Admin — Hari ini`;
+        verifiedToday.value++;
+        showToast(`Institusi "${inst.nama}" berhasil diverifikasi dan diaktifkan!`, 'success');
+    } catch (e) {
+        console.error('[Accept] API error:', e?.response?.status, e?.response?.data);
+        showToast(`Gagal memverifikasi "${inst.nama}". Periksa koneksi ke server.`, 'error');
+    } finally {
+        isActioning.value = false;
+    }
 };
 
 // REJECT
@@ -122,23 +134,37 @@ const handleReject = async () => {
     if (!rejectReason.value.trim() || !activeRejectInstansi.value) return;
     isActioning.value = true;
     const token = getAuthToken();
+    const target = activeRejectInstansi.value;
 
     try {
         const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        await axios.post(`${backendUrl}/admin/notifications`, {
-            user_id: activeRejectInstansi.value.user_id,
-            title: 'Pengajuan Verifikasi Institusi Ditolak',
-            message: `Verifikasi "${activeRejectInstansi.value.nama}" ditolak: ${rejectReason.value}`
-        }, { headers: { Authorization: `Bearer ${token}` } });
-    } catch (e) { /* local fallback */ }
 
-    const idx = institutions.value.findIndex(i => i.id === activeRejectInstansi.value.id);
+        // 1. Update institution status to 'rejected' in the backend
+        await axios.put(`${backendUrl}/admin/verify/instansi/${target.id}`,
+            { status: 'rejected', reason: rejectReason.value },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        // 2. Send rejection notification to the institution user
+        await axios.post(`${backendUrl}/admin/notifications`, {
+            user_id: target.user_id,
+            title: 'Pengajuan Verifikasi Institusi Ditolak',
+            message: `Verifikasi "${target.nama}" ditolak: ${rejectReason.value}`
+        }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) {
+        console.error('[InstitutionVerification] Reject API failed:', e?.response?.status, e?.response?.data);
+        // Continue with local state update even if API fails
+    }
+
+    // Update local state reactively
+    const idx = institutions.value.findIndex(i => i.id === target.id);
     if (idx !== -1) {
         institutions.value[idx].is_flagged = true;
         institutions.value[idx].flag_reason = `Ditolak: ${rejectReason.value}`;
+        institutions.value[idx].status = 'rejected';
     }
     rejectedToday.value++;
-    showToast(`Penolakan untuk "${activeRejectInstansi.value.nama}" berhasil dicatat!`, 'success');
+    showToast(`Penolakan untuk "${target.nama}" berhasil dikirim ke sistem!`, 'success');
     activeRejectInstansi.value = null;
     rejectReason.value = '';
     isActioning.value = false;
@@ -253,17 +279,32 @@ const handleReexamine = (inst) => {
                             <p v-if="inst.kontak.split(' • ')[1]" class="text-slate-450 mt-0.5">{{ inst.kontak.split(' • ')[1] }}</p>
                         </div>
 
-                        <!-- SK File -->
-                        <div class="space-y-1 text-left">
-                            <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider block">SK Izin Operasional</span>
-                            <div class="flex items-center gap-1.5 text-purple-600 hover:text-purple-750 cursor-pointer">
-                                <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                <span class="underline leading-tight text-xs">{{ inst.sk_file }}</span>
-                            </div>
-                            <div class="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-750 cursor-pointer mt-1">
-                                <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"/></svg>
-                                <span class="underline leading-tight text-xs">{{ inst.mitra_file }}</span>
-                            </div>
+                        <!-- Verification Documents -->
+                        <div class="space-y-2 text-left">
+                            <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Dokumen Verifikasi</span>
+
+                            <!-- Only show links if institution has uploaded documents -->
+                            <template v-if="inst.sk_document || inst.sk_file">
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="h-4 w-4 shrink-0 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    <a :href="'http://localhost:8080/storage/uploads/' + (inst.sk_document || inst.sk_file)" target="_blank"
+                                       class="text-xs font-bold text-purple-600 hover:text-purple-800 underline underline-offset-2 truncate max-w-[160px]"
+                                       title="Buka SK Izin Operasional di tab baru">
+                                        Lihat SK Izin
+                                    </a>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="h-4 w-4 shrink-0 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                    <a :href="'http://localhost:8080/storage/uploads/' + (inst.legal_document || inst.mitra_file)" target="_blank"
+                                       class="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline underline-offset-2 truncate max-w-[160px]"
+                                       title="Buka Dokumen Legalitas NIB di tab baru">
+                                        Lihat NIB
+                                    </a>
+                                </div>
+                            </template>
+
+                            <!-- No documents uploaded yet -->
+                            <p v-else class="text-[11px] text-slate-400 italic font-medium">Belum ada dokumen diunggah</p>
                         </div>
 
                         <!-- Verification detail -->
@@ -285,23 +326,52 @@ const handleReexamine = (inst) => {
                     </div>
 
                     <!-- Action Buttons -->
-                    <div v-if="!inst.is_verified" class="flex justify-end gap-3 pt-3 border-t border-slate-50">
-                        <template v-if="inst.is_flagged">
-                            <button type="button" @click="handleReexamine(inst)"
-                                class="px-5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer">
-                                Re-examine
-                            </button>
-                        </template>
-                        <template v-else>
-                            <button type="button" @click="openRejectModal(inst)"
-                                class="px-5 py-2.5 border border-red-200 hover:bg-red-50 text-red-700 text-xs font-bold rounded-xl transition cursor-pointer">
-                                Reject
-                            </button>
-                            <button type="button" @click="handleAccept(inst)" :disabled="isActioning"
-                                class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow transition cursor-pointer">
-                                Accept
-                            </button>
-                        </template>
+                    <div v-if="!inst.is_verified" class="flex flex-col gap-3 pt-3 border-t border-slate-50">
+
+                        <!-- GUARDRAIL: Berkas belum lengkap — kunci semua tombol aksi -->
+                        <div v-if="!inst.sk_document || !inst.legal_document"
+                            class="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                            <span class="text-amber-500 text-base">⚠️</span>
+                            <p class="text-xs font-bold text-amber-700">Berkas Belum Lengkap — Tombol Aksi Dikunci</p>
+                            <p class="text-[10px] text-amber-600 ml-auto font-semibold">Tunggu instansi unggah dokumen</p>
+                        </div>
+
+                        <div class="flex justify-end gap-3">
+                            <template v-if="inst.is_flagged">
+                                <button type="button" @click="handleReexamine(inst)"
+                                    class="px-5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer">
+                                    Re-examine
+                                </button>
+                            </template>
+                            <template v-else>
+                                <!-- Reject button — disabled if documents missing -->
+                                <button type="button"
+                                    @click="inst.sk_document && inst.legal_document ? openRejectModal(inst) : null"
+                                    :disabled="!inst.sk_document || !inst.legal_document || isActioning"
+                                    :class="[
+                                        'px-5 py-2.5 border text-xs font-bold rounded-xl transition',
+                                        (inst.sk_document && inst.legal_document)
+                                            ? 'border-red-200 hover:bg-red-50 text-red-700 cursor-pointer'
+                                            : 'border-slate-100 text-slate-300 opacity-40 cursor-not-allowed pointer-events-none'
+                                    ]">
+                                    Reject
+                                </button>
+
+                                <!-- Accept button — disabled if documents missing -->
+                                <button type="button"
+                                    @click="inst.sk_document && inst.legal_document ? handleAccept(inst) : null"
+                                    :disabled="!inst.sk_document || !inst.legal_document || isActioning"
+                                    :class="[
+                                        'px-5 py-2.5 text-xs font-bold rounded-xl shadow transition',
+                                        (inst.sk_document && inst.legal_document)
+                                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+                                            : 'bg-slate-200 text-slate-400 opacity-40 cursor-not-allowed pointer-events-none'
+                                    ]">
+                                    <svg v-if="isActioning" class="animate-spin h-4 w-4 text-white mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    <span v-else>Accept</span>
+                                </button>
+                            </template>
+                        </div>
                     </div>
                 </div>
             </div>

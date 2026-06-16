@@ -25,13 +25,15 @@ const programType = ref('Beasiswa'); // Beasiswa or Lomba
 const activeTab = ref('Semua'); // Tabs: Semua, Aktif, Menunggu, Ditolak
 
 // Form fields for Beasiswa
+const today = new Date().toISOString().split('T')[0];
+
 const beasiswaForm = ref({
     nama: '',
     deskripsi: '',
-    kuota_pendaftar: 20,
-    tipe_beasiswa: 'Full Tuition',
-    nominal_pendanaan: 15000,
-    link_informasi: 'https://scholarpath.id',
+    kuota_pendaftar: null,
+    tipe_beasiswa: 'Fully Funded',
+    nominal_pendanaan: null,
+    link_informasi: '',
     deadline: '',
     posterFile: null
 });
@@ -40,10 +42,10 @@ const beasiswaForm = ref({
 const olimpiadeForm = ref({
     judul: '',
     deskripsi: '',
-    tipe_lomba: 'Akademik',
-    kuota: 50,
-    biaya_pendaftaran: 0,
-    link_informasi: 'https://scholarpath.id',
+    tipe_lomba: 'Sains',
+    kuota: null,
+    biaya_pendaftaran: null,
+    link_informasi: '',
     deadline: '',
     posterFile: null
 });
@@ -284,12 +286,12 @@ const resetCreateForm = () => {
     currentStep.value = 1;
     programType.value = 'Beasiswa';
     beasiswaForm.value = {
-        nama: '', deskripsi: '', kuota_pendaftar: 20, tipe_beasiswa: 'Full Tuition',
-        nominal_pendanaan: 15000, link_informasi: 'https://scholarpath.id', deadline: '', posterFile: null
+        nama: '', deskripsi: '', kuota_pendaftar: null, tipe_beasiswa: 'Fully Funded',
+        nominal_pendanaan: null, link_informasi: '', deadline: '', posterFile: null
     };
     olimpiadeForm.value = {
-        judul: '', deskripsi: '', tipe_lomba: 'Akademik', kuota: 50,
-        biaya_pendaftaran: 0, link_informasi: 'https://scholarpath.id', deadline: '', posterFile: null
+        judul: '', deskripsi: '', tipe_lomba: 'Sains', kuota: null,
+        biaya_pendaftaran: null, link_informasi: '', deadline: '', posterFile: null
     };
     defaultRequirements.value = [
         { id: 1, label: 'KTP / NISN', enabled: true, isDefault: true },
@@ -314,11 +316,19 @@ const removeCustomRequirement = (id) => {
 };
 
 const goToStep2 = () => {
-    // Basic validation for step 1
     const form = programType.value === 'Beasiswa' ? beasiswaForm.value : olimpiadeForm.value;
     const nameField = programType.value === 'Beasiswa' ? form.nama : form.judul;
-    if (!nameField || !form.deskripsi || !form.deadline) {
-        showToast('Harap isi semua field wajib (Nama, Deskripsi, Deadline).', 'error');
+    const typeField = programType.value === 'Beasiswa' ? form.tipe_beasiswa : form.tipe_lomba;
+    const quotaField = programType.value === 'Beasiswa' ? form.kuota_pendaftar : form.kuota;
+    const amountField = programType.value === 'Beasiswa' ? form.nominal_pendanaan : form.biaya_pendaftaran;
+    
+    if (!nameField || !form.deskripsi || !form.deadline || !typeField || !quotaField || amountField === null || !form.link_informasi) {
+        showToast('Harap isi semua field wajib sebelum melanjutkan.', 'error');
+        return;
+    }
+    
+    if (new Date(form.deadline) < new Date(today)) {
+        showToast('Tanggal deadline tidak boleh berlalu.', 'error');
         return;
     }
     currentStep.value = 2;
@@ -715,7 +725,7 @@ onMounted(() => {
                     <div class="absolute inset-0" @click="handleCancelCreate"></div>
 
                     <!-- Modal Shell -->
-                    <div class="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl p-6 md:p-8 max-w-lg w-full relative z-10 animate-scale max-h-[90vh] overflow-y-auto">
+                    <div class="modal-container-scroll bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-2xl p-6 md:p-8 max-w-lg w-full relative z-10 animate-scale max-h-[90vh] overflow-y-auto">
                         <!-- Header -->
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="text-xl font-extrabold text-slate-800 dark:text-white">Tambah Program Baru</h3>
@@ -742,108 +752,115 @@ onMounted(() => {
                         <!-- ===== STEP 1: Program Info ===== -->
                         <div v-if="currentStep === 1">
                             <!-- Program Type Toggle -->
-                            <div class="mb-5 flex rounded-2xl bg-slate-100 dark:bg-slate-800 p-1">
-                                <button
-                                    type="button"
-                                    @click="programType = 'Beasiswa'"
-                                    class="w-1/2 rounded-xl py-2.5 text-center text-xs font-bold transition-all focus:outline-none"
-                                    :class="programType === 'Beasiswa' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
-                                >
+                            <div class="mb-6 relative flex rounded-2xl bg-slate-100/80 dark:bg-slate-800/80 p-1.5 shadow-inner">
+                                <!-- Active Indicator -->
+                                <div class="absolute inset-y-1.5 w-[calc(50%-6px)] bg-white dark:bg-slate-900 rounded-xl shadow-sm transition-transform duration-300 ease-in-out"
+                                     :class="programType === 'Beasiswa' ? 'translate-x-0' : 'translate-x-full ml-[6px]'"></div>
+                                
+                                <button type="button" @click="programType = 'Beasiswa'" class="relative z-10 w-1/2 py-3 text-center text-xs font-black transition-colors duration-300"
+                                    :class="programType === 'Beasiswa' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'">
                                     🎓 Beasiswa
                                 </button>
-                                <button
-                                    type="button"
-                                    @click="programType = 'Lomba'"
-                                    class="w-1/2 rounded-xl py-2.5 text-center text-xs font-bold transition-all focus:outline-none"
-                                    :class="programType === 'Lomba' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
-                                >
+                                <button type="button" @click="programType = 'Lomba'" class="relative z-10 w-1/2 py-3 text-center text-xs font-black transition-colors duration-300"
+                                    :class="programType === 'Lomba' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'">
                                     🏆 Olimpiade
                                 </button>
                             </div>
 
                             <!-- Beasiswa Form -->
-                            <div v-if="programType === 'Beasiswa'" class="space-y-4">
+                            <div v-if="programType === 'Beasiswa'" class="bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Nama Beasiswa *</label>
-                                    <input type="text" v-model="beasiswaForm.nama" required placeholder="Contoh: Beasiswa Sains Mandiri" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white dark:placeholder-slate-500 transition outline-none" />
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Nama Beasiswa *</label>
+                                    <input type="text" v-model="beasiswaForm.nama" required placeholder="Contoh: Beasiswa Sains Mandiri" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
                                 </div>
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Deskripsi *</label>
-                                    <textarea v-model="beasiswaForm.deskripsi" required placeholder="Tulis rincian syarat dan pendanaan..." rows="3" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white dark:placeholder-slate-500 transition outline-none"></textarea>
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Deskripsi Lengkap *</label>
+                                    <textarea v-model="beasiswaForm.deskripsi" required placeholder="Tulis rincian syarat dan pendanaan..." rows="3" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm"></textarea>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
+                                <div class="grid grid-cols-2 gap-5">
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Kuota Pendaftar</label>
-                                        <input type="number" v-model="beasiswaForm.kuota_pendaftar" min="1" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Tipe Beasiswa *</label>
+                                        <select v-model="beasiswaForm.tipe_beasiswa" required class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm appearance-none cursor-pointer">
+                                            <option value="Fully Funded">Fully Funded</option>
+                                            <option value="Partial">Partial</option>
+                                        </select>
                                     </div>
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Tipe Beasiswa</label>
-                                        <input type="text" v-model="beasiswaForm.tipe_beasiswa" placeholder="Full Tuition" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white dark:placeholder-slate-500 transition outline-none" />
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Nominal (USD)</label>
-                                        <input type="number" v-model="beasiswaForm.nominal_pendanaan" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Link Info</label>
-                                        <input type="url" v-model="beasiswaForm.link_informasi" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Kuota Pendaftar *</label>
+                                        <input type="number" v-model="beasiswaForm.kuota_pendaftar" required min="1" placeholder="Misal: 50" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Deadline *</label>
-                                        <input type="date" v-model="beasiswaForm.deadline" required class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
+                                <div class="grid grid-cols-2 gap-5">
+                                    <div class="relative">
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Nominal Pendanaan *</label>
+                                        <div class="relative flex items-center">
+                                            <span class="absolute left-4 text-xs font-bold text-slate-400">Rp</span>
+                                            <input type="number" v-model="beasiswaForm.nominal_pendanaan" required min="0" placeholder="0" class="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
+                                        </div>
                                     </div>
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Gambar Poster</label>
-                                        <input type="file" accept="image/*" @change="e => beasiswaForm.posterFile = e.target.files[0]" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 dark:file:bg-indigo-900/30 file:text-indigo-700 dark:file:text-indigo-400 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-800/50" />
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Link Pendaftaran Resmi *</label>
+                                        <input type="url" v-model="beasiswaForm.link_informasi" required placeholder="https://..." class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-5">
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Deadline *</label>
+                                        <input type="date" v-model="beasiswaForm.deadline" :min="today" required class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Gambar Poster (Opsional)</label>
+                                        <input type="file" accept="image/*" @change="e => beasiswaForm.posterFile = e.target.files[0]" class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 shadow-sm cursor-pointer" />
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Lomba Form -->
-                            <div v-else class="space-y-4">
+                            <div v-else class="bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Judul Lomba *</label>
-                                    <input type="text" v-model="olimpiadeForm.judul" required placeholder="Contoh: Olimpiade Fisika Nasional" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white dark:placeholder-slate-500 transition outline-none" />
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Judul Olimpiade *</label>
+                                    <input type="text" v-model="olimpiadeForm.judul" required placeholder="Contoh: Olimpiade Sains Nasional" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
                                 </div>
                                 <div>
-                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Deskripsi *</label>
-                                    <textarea v-model="olimpiadeForm.deskripsi" required placeholder="Tulis rincian lomba..." rows="3" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white dark:placeholder-slate-500 transition outline-none"></textarea>
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Deskripsi Lengkap *</label>
+                                    <textarea v-model="olimpiadeForm.deskripsi" required placeholder="Tulis rincian lomba..." rows="3" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm"></textarea>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
+                                <div class="grid grid-cols-2 gap-5">
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Kuota Tim/Siswa</label>
-                                        <input type="number" v-model="olimpiadeForm.kuota" min="1" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Tipe Lomba</label>
-                                        <select v-model="olimpiadeForm.tipe_lomba" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none">
-                                            <option value="Akademik">Akademik</option>
-                                            <option value="Non-Akademik">Non-Akademik</option>
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Kategori Lomba *</label>
+                                        <select v-model="olimpiadeForm.tipe_lomba" required class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm appearance-none cursor-pointer">
+                                            <option value="Sains">Sains</option>
+                                            <option value="Teknologi">Teknologi</option>
+                                            <option value="Seni">Seni</option>
+                                            <option value="Umum">Umum</option>
                                         </select>
                                     </div>
-                                </div>
-                                <div class="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Biaya (Rupiah)</label>
-                                        <input type="number" v-model="olimpiadeForm.biaya_pendaftaran" min="0" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
-                                    </div>
-                                    <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Link Info</label>
-                                        <input type="url" v-model="olimpiadeForm.link_informasi" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Kuota Tim/Siswa *</label>
+                                        <input type="number" v-model="olimpiadeForm.kuota" required min="1" placeholder="Misal: 100" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Deadline *</label>
-                                        <input type="date" v-model="olimpiadeForm.deadline" required class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none" />
+                                <div class="grid grid-cols-2 gap-5">
+                                    <div class="relative">
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Biaya Pendaftaran *</label>
+                                        <div class="relative flex items-center">
+                                            <span class="absolute left-4 text-xs font-bold text-slate-400">Rp</span>
+                                            <input type="number" v-model="olimpiadeForm.biaya_pendaftaran" required min="0" placeholder="0" class="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
+                                        </div>
                                     </div>
                                     <div>
-                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Gambar Poster</label>
-                                        <input type="file" accept="image/*" @change="e => olimpiadeForm.posterFile = e.target.files[0]" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl text-xs text-slate-800 dark:text-white transition outline-none file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 dark:file:bg-indigo-900/30 file:text-indigo-700 dark:file:text-indigo-400" />
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Link Pendaftaran Resmi *</label>
+                                        <input type="url" v-model="olimpiadeForm.link_informasi" required placeholder="https://..." class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-5">
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Deadline *</label>
+                                        <input type="date" v-model="olimpiadeForm.deadline" :min="today" required class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Gambar Poster (Opsional)</label>
+                                        <input type="file" accept="image/*" @change="e => olimpiadeForm.posterFile = e.target.files[0]" class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 shadow-sm cursor-pointer" />
                                     </div>
                                 </div>
                             </div>
@@ -923,5 +940,16 @@ onMounted(() => {
 @keyframes scaleIn {
     from { opacity: 0; transform: scale(0.92) translateY(10px); }
     to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.modal-container-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.modal-container-scroll {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
 }
 </style>

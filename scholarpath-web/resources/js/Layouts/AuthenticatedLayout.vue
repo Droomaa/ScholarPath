@@ -1,7 +1,20 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { Link, useForm, router } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
+import { Link, useForm, router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
+
+// ============================================================
+// INERTIA SHARED PROPS — Single Source of Truth for Auth State
+// ============================================================
+const page = usePage();
+const authUser = computed(() => page.props.auth?.user || {});
+const institutionStatus = computed(() => authUser.value?.status || 'pending');
+const hasUploadedDocs = computed(() => authUser.value?.has_uploaded_docs || false);
+const isInstansi = computed(() => authUser.value?.role?.toLowerCase() === 'instansi');
+const isApproved = computed(() => institutionStatus.value === 'approved' || institutionStatus.value === 'active');
+const isPending = computed(() => institutionStatus.value === 'pending' || institutionStatus.value === 'unverified');
+const isRejected = computed(() => institutionStatus.value === 'rejected');
+const isLocked = computed(() => isInstansi.value && !isApproved.value);
 
 const showingMobileMenu = ref(false);
 const formLogout = useForm({});
@@ -22,8 +35,86 @@ const userProfile = ref({
     role: 'Student',
     keahlian: '',
     foto: '',
-    theme: 'light'
+    theme: 'light',
 });
+
+// ==============================================================
+// VERIFICATION DOCS UPLOAD — 2 mandatory PDF files
+// ==============================================================
+const fileIzin = ref(null);      // SK Izin Operasional
+const fileLegalitas = ref(null); // Dokumen NIB
+const isSubmittingVerification = ref(false);
+const verificationErrorMsg = ref('');
+
+const submitVerificationDocs = async () => {
+    verificationErrorMsg.value = '';
+
+    // Strict double-file check — keduanya wajib dipilih
+    if (!fileIzin.value || !fileLegalitas.value) {
+        verificationErrorMsg.value = 'Kedua dokumen wajib dipilih sebelum mengirim berkas!';
+        return;
+    }
+
+    // Validasi ukuran file maksimal 5MB per file
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (fileIzin.value.size > maxSize) {
+        verificationErrorMsg.value = 'File SK Izin melebihi batas maksimal 5MB. Pilih file yang lebih kecil.';
+        return;
+    }
+    if (fileLegalitas.value.size > maxSize) {
+        verificationErrorMsg.value = 'File NIB melebihi batas maksimal 5MB. Pilih file yang lebih kecil.';
+        return;
+    }
+
+    // Validasi tipe file — hanya PDF
+    if (fileIzin.value.type !== 'application/pdf') {
+        verificationErrorMsg.value = 'File SK Izin harus berformat PDF.';
+        return;
+    }
+    if (fileLegalitas.value.type !== 'application/pdf') {
+        verificationErrorMsg.value = 'File NIB harus berformat PDF.';
+        return;
+    }
+
+    isSubmittingVerification.value = true;
+    try {
+        // Prioritaskan go_token dari Inertia props (dibuat oleh Laravel middleware)
+        // Fallback ke localStorage jika login melalui Go API langsung
+        const token = page.props.auth?.go_token || localStorage.getItem('auth_token');
+
+        if (!token) {
+            verificationErrorMsg.value = 'Sesi login tidak valid. Silakan logout dan login kembali.';
+            isSubmittingVerification.value = false;
+            return;
+        }
+
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080');
+
+        // === SATU ENDPOINT: POST /api/instansi/upload-docs ===
+        // Backend mengidentifikasi instansi dari JWT (user_id) secara OTOMATIS
+        // Tidak perlu kirim instansi_id dari frontend — eliminates 'Instansi tidak ditemukan' bug
+        const formData = new FormData();
+        formData.append('sk_document', fileIzin.value);        // c.FormFile("sk_document") di Go
+        formData.append('legal_document', fileLegalitas.value); // c.FormFile("legal_document") di Go
+
+        await axios.post(`${backendUrl}/api/instansi/upload-docs`, formData, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data',
+            }
+        });
+
+        // Reload seluruh page props Inertia agar has_uploaded_docs = true terefleksi di layout
+        router.reload();
+    } catch (e) {
+        const serverMsg = e?.response?.data?.error || e?.response?.data?.message;
+        verificationErrorMsg.value = serverMsg
+            || `Gagal mengunggah dokumen (${e?.response?.status || 'Network Error'}). Periksa koneksi dan coba lagi.`;
+        console.error('[VerificationDocs] Upload failed — Status:', e?.response?.status, '| Data:', e?.response?.data);
+    } finally {
+        isSubmittingVerification.value = false;
+    }
+};
 
 const isDarkMode = ref(false);
 
@@ -208,6 +299,9 @@ onMounted(() => {
                     userProfile.value.theme = u.theme;
                     applyTheme(u.theme);
                 }
+                if (u.status) {
+                    userProfile.value.status = u.status;
+                }
             }
         }).catch(err => {
             console.error('Failed to load profile details in layout:', err);
@@ -307,47 +401,59 @@ onMounted(() => {
                     </Link>
                 </template>
 
-                <template v-else-if="userProfile.role?.toLowerCase() === 'instansi'">
+                <template v-else-if="isInstansi">
                     <!-- Dashboard -->
                     <Link
-                        :href="route('dashboard')"
+                        :href="isApproved ? route('dashboard') : '#'"
                         class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                        :class="route().current('dashboard') 
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' 
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'"
+                        :class="[
+                            route().current('dashboard') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                            { 'pointer-events-none opacity-40 cursor-not-allowed': isLocked }
+                        ]"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
                         </svg>
                         Dashboard
+                        <span v-if="isLocked" class="ml-auto">
+                            <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        </span>
                     </Link>
 
                     <!-- Kelola Program -->
                     <Link
-                        :href="route('kelola-program')"
+                        :href="isApproved ? route('kelola-program') : '#'"
                         class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                        :class="route().current('kelola-program') 
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' 
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'"
+                        :class="[
+                            route().current('kelola-program') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                            { 'pointer-events-none opacity-40 cursor-not-allowed': isLocked }
+                        ]"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" />
                         </svg>
                         Kelola Program
+                        <span v-if="isLocked" class="ml-auto">
+                            <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        </span>
                     </Link>
 
                     <!-- Pelamar -->
                     <Link
-                        :href="route('pelamar')"
+                        :href="isApproved ? route('pelamar') : '#'"
                         class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                        :class="route().current('pelamar') 
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' 
-                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'"
+                        :class="[
+                            route().current('pelamar') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                            { 'pointer-events-none opacity-40 cursor-not-allowed': isLocked }
+                        ]"
                     >
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                         Pelamar
+                        <span v-if="isLocked" class="ml-auto">
+                            <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        </span>
                     </Link>
 
                 </template>
@@ -610,28 +716,37 @@ onMounted(() => {
                             System Logs
                         </Link>
                     </template>
-                    <template v-else-if="userProfile.role?.toLowerCase() === 'instansi'">
+                    <template v-else-if="isInstansi">
                         <!-- Dashboard -->
                         <Link
-                            :href="route('dashboard')"
+                            :href="isApproved ? route('dashboard') : '#'"
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                            :class="route().current('dashboard') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
+                            :class="[
+                                route().current('dashboard') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50',
+                                { 'pointer-events-none opacity-40 cursor-not-allowed': isLocked }
+                            ]"
                         >
                             Dashboard
                         </Link>
                         <!-- Kelola Program -->
                         <Link
-                            :href="route('kelola-program')"
+                            :href="isApproved ? route('kelola-program') : '#'"
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                            :class="route().current('kelola-program') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
+                            :class="[
+                                route().current('kelola-program') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50',
+                                { 'pointer-events-none opacity-40 cursor-not-allowed': isLocked }
+                            ]"
                         >
                             Kelola Program
                         </Link>
                         <!-- Pelamar -->
                         <Link
-                            :href="route('pelamar')"
+                            :href="isApproved ? route('pelamar') : '#'"
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
-                            :class="route().current('pelamar') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
+                            :class="[
+                                route().current('pelamar') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50',
+                                { 'pointer-events-none opacity-40 cursor-not-allowed': isLocked }
+                            ]"
                         >
                             Pelamar
                         </Link>
@@ -684,9 +799,110 @@ onMounted(() => {
                 </div>
             </aside>
 
-            <!-- Main Page Content Area -->
+            <!-- ================================================= -->
+            <!-- MAIN PAGE CONTENT — TOTAL LOCKDOWN GATE           -->
+            <!-- ================================================= -->
             <main class="flex-1 overflow-y-auto p-6 md:p-8 bg-slate-50/40 dark:bg-slate-900">
-                <slot />
+
+                <!-- ✅ KONDISI A: APPROVED — Render slot normally -->
+                <template v-if="!isInstansi || isApproved">
+                    <slot />
+                </template>
+
+                <!-- 🔒 KONDISI B + C: LOCKED — Institution not yet approved -->
+                <template v-else>
+                    <div class="max-w-2xl mx-auto py-10 space-y-6">
+
+                        <!-- ❌ KONDISI C: REJECTED — Red alert banner + re-upload form -->
+                        <template v-if="isRejected">
+                            <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800/60 rounded-3xl p-6 flex items-start gap-4">
+                                <div class="shrink-0 h-10 w-10 rounded-full bg-red-100 dark:bg-red-800/50 flex items-center justify-center text-red-600 dark:text-red-400">
+                                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </div>
+                                <div>
+                                    <h3 class="font-black text-red-800 dark:text-red-300 text-base">Pendaftaran Instansi Anda DITOLAK oleh Admin</h3>
+                                    <p class="text-red-700 dark:text-red-400 text-sm font-medium mt-1">Mohon periksa kembali keabsahan berkas Anda dan ajukan ulang berkas yang valid di bawah ini.</p>
+                                </div>
+                            </div>
+
+                            <!-- Re-upload form for rejected -->
+                            <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm p-8">
+                                <h4 class="text-lg font-black text-slate-800 dark:text-white mb-1">Ajukan Ulang Berkas Verifikasi</h4>
+                                <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Unggah ulang 2 (dua) dokumen wajib berikut dalam format PDF. Ukuran maksimum 5MB per file.</p>
+                                <form @submit.prevent="submitVerificationDocs" class="space-y-5">
+                                    <div>
+                                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">SK Izin Operasional / SK Pendirian *</label>
+                                        <input type="file" accept=".pdf" required @change="e => fileIzin = e.target.files[0]" class="w-full text-sm text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/40 dark:file:text-indigo-300 cursor-pointer" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Dokumen Legalitas NIB *</label>
+                                        <input type="file" accept=".pdf" required @change="e => fileLegalitas = e.target.files[0]" class="w-full text-sm text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/40 dark:file:text-indigo-300 cursor-pointer" />
+                                    </div>
+                                    <p v-if="verificationErrorMsg" class="text-red-600 dark:text-red-400 text-xs font-semibold">⚠ {{ verificationErrorMsg }}</p>
+                                    <button type="submit" :disabled="isSubmittingVerification" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                        <svg v-if="isSubmittingVerification" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        <span>{{ isSubmittingVerification ? 'Mengunggah...' : '📤 Kirim Ulang Berkas' }}</span>
+                                    </button>
+                                </form>
+                            </div>
+                        </template>
+
+                        <!-- ⏳ KONDISI B: PENDING -->
+                        <template v-else-if="isPending">
+
+                            <!-- B1: Belum upload dokumen — show upload form -->
+                            <template v-if="!hasUploadedDocs">
+                                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-3xl p-6 flex items-start gap-4">
+                                    <div class="shrink-0 h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-800/50 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-black text-amber-800 dark:text-amber-300 text-base">Akun Anda Belum Aktif</h3>
+                                        <p class="text-amber-700 dark:text-amber-400 text-sm font-medium mt-1">Mohon lengkapi 2 dokumen persyaratan wajib di bawah ini agar Admin dapat memverifikasi instansi Anda.</p>
+                                    </div>
+                                </div>
+
+                                <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm p-8">
+                                    <h4 class="text-lg font-black text-slate-800 dark:text-white mb-1">Lengkapi Dokumen Verifikasi</h4>
+                                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Unggah 2 (dua) dokumen berikut dalam format PDF. Ukuran maksimum 5MB per file.</p>
+                                    <form @submit.prevent="submitVerificationDocs" class="space-y-5">
+                                        <div>
+                                            <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">SK Izin Operasional / SK Pendirian *</label>
+                                            <input type="file" accept=".pdf" required @change="e => fileIzin = e.target.files[0]" class="w-full text-sm text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/40 dark:file:text-indigo-300 cursor-pointer" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Dokumen Legalitas NIB *</label>
+                                            <input type="file" accept=".pdf" required @change="e => fileLegalitas = e.target.files[0]" class="w-full text-sm text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/40 dark:file:text-indigo-300 cursor-pointer" />
+                                        </div>
+                                        <p v-if="verificationErrorMsg" class="text-red-600 dark:text-red-400 text-xs font-semibold">⚠ {{ verificationErrorMsg }}</p>
+                                        <button type="submit" :disabled="isSubmittingVerification" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                            <svg v-if="isSubmittingVerification" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            <span>{{ isSubmittingVerification ? 'Mengunggah...' : '📤 Kirim Dokumen Verifikasi' }}</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </template>
+
+                            <!-- B2: Sudah upload, tunggu review admin -->
+                            <template v-else>
+                                <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm p-10 text-center">
+                                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-900/40 mb-6">
+                                        <svg class="h-9 w-9 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                                    </div>
+                                    <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2">Berkas Sedang Ditinjau</h3>
+                                    <p class="text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto">Berkas Anda telah berhasil diunggah dan sedang diperiksa oleh Admin. Proses peninjauan memakan waktu maksimal <strong class="text-indigo-600 dark:text-indigo-400">1×24 jam</strong>.</p>
+                                    <div class="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-xs font-bold">
+                                        <span class="h-2 w-2 rounded-full bg-indigo-400 animate-pulse"></span>
+                                        Menunggu Persetujuan Admin
+                                    </div>
+                                </div>
+                            </template>
+
+                        </template>
+
+                    </div>
+                </template>
+
             </main>
         </div>
     </div>
