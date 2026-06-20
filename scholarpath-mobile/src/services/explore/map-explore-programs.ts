@@ -12,6 +12,7 @@ import type {
 } from '@/src/types/shared/program';
 
 import { parseDeskripsi } from './parse-deskripsi';
+import { resolveProgramEducationLevels } from './resolve-education-levels';
 import { resolveProgramOrganizer } from './resolve-program-organizer';
 
 const BEASISWA_IMAGE_URI =
@@ -52,29 +53,6 @@ function toSortDate(isoDate: string | undefined): number {
   }
 
   return date.getFullYear() * 10_000 + (date.getMonth() + 1) * 100 + date.getDate();
-}
-
-function resolveEducationLevels(
-  jenjangId: number | null | undefined,
-  jenjangLookup: Map<number, string>
-): EducationLevel[] {
-  if (!jenjangId) {
-    return ['SMA'];
-  }
-
-  const nama = jenjangLookup.get(jenjangId);
-  switch (nama) {
-    case 'SMP':
-      return ['SMP'];
-    case 'SMA':
-      return ['SMA'];
-    case 'SMK':
-      return ['SMK'];
-    case 'SMP-SMA':
-      return ['SMP', 'SMA'];
-    default:
-      return ['SMA'];
-  }
 }
 
 function resolveProvider(
@@ -121,7 +99,12 @@ export function mapBeasiswaToExploreProgram(
     category: ui.category,
     categoryLabel: ui.categoryLabel,
     categoryTag: ui.categoryTag,
-    educationLevels: resolveEducationLevels(record.jenjang_id, jenjangLookup),
+    educationLevels: resolveProgramEducationLevels(
+      record.jenjang_id,
+      jenjangLookup,
+      record.nama,
+      parsed.description
+    ),
     imageUri: ui.imageUri,
     status: 'Terbuka',
     description: parsed.description,
@@ -150,7 +133,12 @@ export function mapOlimpiadeToExploreProgram(
     category: ui.category,
     categoryLabel: ui.categoryLabel,
     categoryTag: ui.categoryTag,
-    educationLevels: resolveEducationLevels(record.jenjang_id, jenjangLookup),
+    educationLevels: resolveProgramEducationLevels(
+      record.jenjang_id,
+      jenjangLookup,
+      record.judul,
+      parsed.description
+    ),
     imageUri: ui.imageUri,
     status: 'Terbuka',
     description: parsed.description,

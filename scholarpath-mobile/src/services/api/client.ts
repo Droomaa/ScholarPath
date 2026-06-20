@@ -41,7 +41,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     });
   } catch {
     throw new ApiError(
-      `Tidak dapat terhubung ke server (${API_BASE_URL}). Pastikan backend sudah jalan dan IP di api.ts sesuai Wi-Fi kamu.`,
+      `Tidak dapat terhubung ke server (${API_BASE_URL}). Pastikan backend Go sudah jalan.`,
       0
     );
   }

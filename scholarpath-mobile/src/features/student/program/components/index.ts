@@ -13,4 +13,6 @@ export { EligibilityTermsSection } from './EligibilityTermsSection';
 export { DocumentUploadCard } from './DocumentUploadCard';
 export { MandatoryDocumentSection } from './MandatoryDocumentSection';
 export { RequiredDocumentsSection } from './RequiredDocumentsSection';
+export { RegistrationProgressSteps, type RegistrationStep } from './RegistrationProgressSteps';
+export { RegistrationProfileSection } from './RegistrationProfileSection';
 export { RegistrationFooter } from './RegistrationFooter';

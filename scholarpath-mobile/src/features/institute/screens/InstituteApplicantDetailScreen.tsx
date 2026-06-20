@@ -168,6 +168,7 @@ export function InstituteApplicantDetailScreen() {
           <ApplicantDataCard
             fullName={applicant.name}
             educationLevel={applicant.educationLevel}
+            schoolOrigin={applicant.schoolOrigin}
             major={applicant.major}
             email={applicant.email}
           />

@@ -60,3 +60,10 @@ export function getDefaultRequiredDocuments(
     ? BEASISWA_REQUIRED_DOCUMENTS
     : KOMPETISI_REQUIRED_DOCUMENTS;
 }
+
+export const DEFAULT_ELIGIBILITY_TERMS = [
+  'Saya berjanji bahwa semua data dan dokumen yang saya unggah adalah asli dan benar.',
+  'Saya berjanji akan mengikuti seluruh ketentuan, tata tertib, dan prosedur program.',
+  'Saya berjanji tidak akan menyalahgunakan manfaat beasiswa atau kompetisi yang diberikan.',
+  'Saya memahami bahwa data palsu dapat mengakibatkan diskualifikasi atau pembatalan pendaftaran.',
+];

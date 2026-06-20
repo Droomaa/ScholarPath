@@ -72,6 +72,7 @@ export type InstansiApplicantDetailRecord = {
   student_email: string;
   jenjang_nama: string;
   major: string;
+  asal_sekolah?: string;
   keahlian: string;
   motivation_text: string;
   program_type: string;

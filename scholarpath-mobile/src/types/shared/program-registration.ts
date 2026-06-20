@@ -1,3 +1,5 @@
+import type { EducationLevel } from '@/src/types/shared/program';
+
 export type ProgramDocumentIcon = 'document' | 'school' | 'trophy' | 'essay';
 
 export type ProgramDocumentRequirement = {
@@ -16,6 +18,9 @@ export type UploadedDocument = {
 
 export type ProgramRegistrationDraft = {
   agreedToTerms: boolean;
+  fullName: string;
+  schoolOrigin: string;
+  educationLevel: EducationLevel | '';
   documents: Record<string, UploadedDocument>;
   motivationAnswer: string;
 };

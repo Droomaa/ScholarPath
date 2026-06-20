@@ -16,7 +16,7 @@ import {
   filterNotifications,
   groupNotificationsBySection,
 } from '@/src/features/student/notifications/utils/build-notifications';
-import { getNotifications, mapNotificationRecords } from '@/src/services/notifications';
+import { getNotifications, mapNotificationRecords, mergeStudentNotifications } from '@/src/services/notifications';
 import {
   type NotificationFilter,
   type NotificationSection,
@@ -30,7 +30,6 @@ type NotificationContextValue = {
   unreadCount: number;
   filter: NotificationFilter;
   isLoading: boolean;
-  isUsingFallback: boolean;
   setFilter: (filter: NotificationFilter) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
@@ -40,7 +39,7 @@ type NotificationContextValue = {
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { registrations, activePrograms } = useApplications();
+  const { registrations, activePrograms, refreshRegistrations } = useApplications();
   const session = useStudentSession();
   const { wishlistIds } = useWishlist();
   const { token, isAuthenticated } = session;
@@ -49,9 +48,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [readIds, setReadIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [isLoading, setIsLoading] = useState(false);
-  const [isUsingFallback, setIsUsingFallback] = useState(false);
 
-  const fallbackNotifications = useMemo(
+  const localNotifications = useMemo(
     () =>
       buildStudentNotifications({
         registrations,
@@ -66,7 +64,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const loadNotifications = useCallback(async () => {
     if (!token) {
       setApiNotifications([]);
-      setIsUsingFallback(true);
       return;
     }
 
@@ -75,10 +72,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     try {
       const response = await getNotifications(token);
       setApiNotifications(mapNotificationRecords(response.data ?? [], []));
-      setIsUsingFallback(false);
     } catch {
       setApiNotifications([]);
-      setIsUsingFallback(true);
     } finally {
       setIsLoading(false);
     }
@@ -91,19 +86,14 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
 
     setApiNotifications([]);
-    setIsUsingFallback(true);
-  }, [isAuthenticated, token, loadNotifications]);
+  }, [isAuthenticated, token, loadNotifications, registrations]);
 
   const notifications = useMemo(() => {
-    if (isUsingFallback) {
-      return fallbackNotifications;
-    }
-
-    return apiNotifications.map((item) => ({
+    return mergeStudentNotifications(apiNotifications, localNotifications).map((item) => ({
       ...item,
       read: item.read || readIds.includes(item.id),
     }));
-  }, [apiNotifications, fallbackNotifications, isUsingFallback, readIds]);
+  }, [apiNotifications, localNotifications, readIds]);
 
   const filteredNotifications = useMemo(
     () => filterNotifications(notifications, filter),
@@ -125,7 +115,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       unreadCount,
       filter,
       isLoading,
-      isUsingFallback,
       setFilter,
       markAsRead: (id: string) =>
         setReadIds((prev) => (prev.includes(id) ? prev : [...prev, id])),
@@ -135,7 +124,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           notifications.forEach((item) => nextIds.add(item.id));
           return Array.from(nextIds);
         }),
-      refresh: loadNotifications,
+      refresh: async () => {
+        await Promise.all([loadNotifications(), refreshRegistrations()]);
+      },
     }),
     [
       notifications,
@@ -144,8 +135,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       unreadCount,
       filter,
       isLoading,
-      isUsingFallback,
       loadNotifications,
+      refreshRegistrations,
     ]
   );
 

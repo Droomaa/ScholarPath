@@ -11,6 +11,7 @@ type ApplicantDataField = {
 type ApplicantDataCardProps = {
   fullName: string;
   educationLevel: string;
+  schoolOrigin: string;
   major: string;
   email: string;
 };
@@ -27,6 +28,7 @@ function ApplicantDataRow({ label, value, variant = 'default' }: ApplicantDataFi
 export function ApplicantDataCard({
   fullName,
   educationLevel,
+  schoolOrigin,
   major,
   email,
 }: ApplicantDataCardProps) {
@@ -34,6 +36,7 @@ export function ApplicantDataCard({
     <View style={styles.card}>
       <ApplicantDataRow label="NAMA LENGKAP" value={fullName} />
       <ApplicantDataRow label="Jenjang pendidikan" value={educationLevel} />
+      <ApplicantDataRow label="Asal sekolah" value={schoolOrigin} />
       <ApplicantDataRow label="Jurusan" value={major} />
       <ApplicantDataRow label="EMAIL" value={email} variant="email" />
     </View>

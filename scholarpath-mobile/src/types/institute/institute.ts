@@ -87,6 +87,7 @@ export type InstituteApplicant = {
 export type InstituteApplicantDetail = InstituteApplicant & {
   email: string;
   educationLevel: string;
+  schoolOrigin: string;
   trackLabel: string;
   skills: ApplicantSkill[];
   achievements: ApplicantAchievement[];

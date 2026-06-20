@@ -3,10 +3,19 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EducationLevel } from '@/src/types/shared/program';
 import { AuthColors, AuthTypography, FontFamily } from '@/src/theme';
 
+export type JenjangFilterValue = 'semua' | EducationLevel;
+
 type JenjangFilterProps = {
-  options: readonly EducationLevel[];
-  selected: EducationLevel;
-  onSelect: (level: EducationLevel) => void;
+  options: readonly JenjangFilterValue[];
+  selected: JenjangFilterValue;
+  onSelect: (level: JenjangFilterValue) => void;
+};
+
+const LABELS: Record<JenjangFilterValue, string> = {
+  semua: 'Semua',
+  SMP: 'SMP',
+  SMA: 'SMA',
+  SMK: 'SMK',
 };
 
 export function JenjangFilter({ options, selected, onSelect }: JenjangFilterProps) {
@@ -21,7 +30,9 @@ export function JenjangFilter({ options, selected, onSelect }: JenjangFilterProp
               key={level}
               style={[styles.chip, isActive && styles.chipActive]}
               onPress={() => onSelect(level)}>
-              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{level}</Text>
+              <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+                {LABELS[level]}
+              </Text>
             </Pressable>
           );
         })}

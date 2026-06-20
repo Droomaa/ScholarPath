@@ -1,6 +1,8 @@
 import { router, type Href } from 'expo-router';
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useExplorePrograms } from '@/src/context/student/ExploreProgramsContext';
 import { useStudentSession } from '@/src/context/student/StudentSessionContext';
 import {
   AiRecommendationCard,
@@ -10,15 +12,43 @@ import {
   SectionHeader,
 } from '@/src/features/student/home/components';
 import {
-  OLYMPIAD_ITEMS,
-  SCHOLARSHIP_ITEMS,
-} from '@/src/features/student/home/constants/home-mock-data';
+  mapProgramToOlympiadItem,
+  mapProgramToScholarshipItem,
+} from '@/src/features/student/home/utils/map-home-programs';
+import { filterProgramsForStudentLevel } from '@/src/services/explore/resolve-education-levels';
 import { AuthColors, AuthTypography } from '@/src/theme';
 import { getFirstName } from '@/src/utils/getFirstName';
 
+const HOME_SECTION_LIMIT = 6;
+
 export function StudentHomeScreen() {
-  const { fullName, hasAiRecommendationHistory, aiRecommendation } = useStudentSession();
+  const { fullName, educationLevel, hasAiRecommendationHistory, aiRecommendation } =
+    useStudentSession();
+  const { programs } = useExplorePrograms();
   const firstName = getFirstName(fullName);
+
+  const visiblePrograms = useMemo(
+    () => filterProgramsForStudentLevel(programs, educationLevel),
+    [programs, educationLevel]
+  );
+
+  const scholarshipItems = useMemo(
+    () =>
+      visiblePrograms
+        .filter((program) => program.category === 'beasiswa')
+        .slice(0, HOME_SECTION_LIMIT)
+        .map(mapProgramToScholarshipItem),
+    [visiblePrograms]
+  );
+
+  const olympiadItems = useMemo(
+    () =>
+      visiblePrograms
+        .filter((program) => program.category === 'kompetisi')
+        .slice(0, HOME_SECTION_LIMIT)
+        .map(mapProgramToOlympiadItem),
+    [visiblePrograms]
+  );
 
   return (
     <View style={styles.screen}>
@@ -53,14 +83,18 @@ export function StudentHomeScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalList}>
-            {SCHOLARSHIP_ITEMS.map((item) => (
-              <ScholarshipCard
-                key={item.id}
-                item={item}
-                showMatch={hasAiRecommendationHistory}
-                onPress={() => router.push(`/program/${item.id}` as Href)}
-              />
-            ))}
+            {scholarshipItems.length === 0 ? (
+              <Text style={styles.emptyHint}>Belum ada beasiswa untuk ditampilkan.</Text>
+            ) : (
+              scholarshipItems.map((item) => (
+                <ScholarshipCard
+                  key={item.id}
+                  item={item}
+                  showMatch={hasAiRecommendationHistory}
+                  onPress={() => router.push(`/program/${item.id}` as Href)}
+                />
+              ))
+            )}
           </ScrollView>
         </View>
 
@@ -73,13 +107,17 @@ export function StudentHomeScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.horizontalList}>
-            {OLYMPIAD_ITEMS.map((item) => (
-              <OlympiadCard
-                key={item.id}
-                item={item}
-                onPress={() => router.push(`/program/${item.id}` as Href)}
-              />
-            ))}
+            {olympiadItems.length === 0 ? (
+              <Text style={styles.emptyHint}>Belum ada kompetisi untuk ditampilkan.</Text>
+            ) : (
+              olympiadItems.map((item) => (
+                <OlympiadCard
+                  key={item.id}
+                  item={item}
+                  onPress={() => router.push(`/program/${item.id}` as Href)}
+                />
+              ))
+            )}
           </ScrollView>
         </View>
       </ScrollView>
@@ -115,5 +153,10 @@ const styles = StyleSheet.create({
   horizontalList: {
     gap: 16,
     paddingRight: 20,
+  },
+  emptyHint: {
+    ...AuthTypography.profileInput,
+    color: AuthColors.textMuted,
+    paddingVertical: 8,
   },
 });

@@ -2,6 +2,7 @@ import type { EducationLevel } from '@/src/types/shared/program';
 import type { JenjangPendidikan, UpdateProfileRequest, UserProfile } from '@/src/types/shared/profile';
 
 export type ParsedKeahlian = {
+  schoolOrigin: string;
   major: string;
   interests: string[];
   skills: string[];
@@ -10,6 +11,7 @@ export type ParsedKeahlian = {
 export type ProfilePersistInput = {
   fullName: string;
   educationLevel: EducationLevel | '';
+  schoolOrigin?: string;
   major?: string;
   interests?: string[];
   skills?: string[];
@@ -62,19 +64,21 @@ export function resolveEducationLevel(
 }
 
 export function serializeKeahlian(input: {
+  schoolOrigin?: string;
   major?: string;
   interests?: string[];
   skills?: string[];
 }): string {
+  const schoolOrigin = input.schoolOrigin?.trim() || '-';
   const major = input.major?.trim() || '-';
   const interests = input.interests?.length ? input.interests.join(', ') : '-';
   const skills = input.skills?.length ? input.skills.join(', ') : '-';
 
-  return `Jurusan: ${major} | Minat: ${interests} | Keahlian: ${skills}`;
+  return `Asal Sekolah: ${schoolOrigin} | Jurusan: ${major} | Minat: ${interests} | Keahlian: ${skills}`;
 }
 
 export function parseKeahlian(keahlian: string): ParsedKeahlian {
-  const result: ParsedKeahlian = { major: '', interests: [], skills: [] };
+  const result: ParsedKeahlian = { schoolOrigin: '', major: '', interests: [], skills: [] };
 
   if (!keahlian?.trim()) {
     return result;
@@ -83,7 +87,12 @@ export function parseKeahlian(keahlian: string): ParsedKeahlian {
   const parts = keahlian.split(' | ').map((part) => part.trim());
 
   for (const part of parts) {
-    if (part.startsWith('Jurusan:')) {
+    if (part.startsWith('Asal Sekolah:')) {
+      const value = part.slice('Asal Sekolah:'.length).trim();
+      if (value && value !== '-') {
+        result.schoolOrigin = value;
+      }
+    } else if (part.startsWith('Jurusan:')) {
       const value = part.slice('Jurusan:'.length).trim();
       if (value && value !== '-') {
         result.major = value;
@@ -101,11 +110,35 @@ export function parseKeahlian(keahlian: string): ParsedKeahlian {
     }
   }
 
-  if (!result.major && result.interests.length === 0 && result.skills.length === 0) {
+  if (
+    !result.schoolOrigin &&
+    !result.major &&
+    result.interests.length === 0 &&
+    result.skills.length === 0
+  ) {
     result.skills = [keahlian.trim()];
   }
 
   return result;
+}
+
+export function mergeKeahlianFromExisting(
+  existingKeahlian: string,
+  updates: {
+    schoolOrigin?: string;
+    major?: string;
+    interests?: string[];
+    skills?: string[];
+  }
+): string {
+  const parsed = parseKeahlian(existingKeahlian);
+
+  return serializeKeahlian({
+    schoolOrigin: updates.schoolOrigin ?? parsed.schoolOrigin,
+    major: updates.major ?? parsed.major,
+    interests: updates.interests ?? parsed.interests,
+    skills: updates.skills ?? parsed.skills,
+  });
 }
 
 export function buildUpdatePayload(
@@ -115,6 +148,7 @@ export function buildUpdatePayload(
   const payload: UpdateProfileRequest = {
     name: profile.fullName.trim(),
     keahlian: serializeKeahlian({
+      schoolOrigin: profile.schoolOrigin,
       major: profile.major,
       interests: profile.interests,
       skills: profile.skills,
@@ -136,6 +170,7 @@ export function mapUserToSessionUpdates(user: UserProfile, jenjangList: JenjangP
     fullName: user.name ?? '',
     email: user.email ?? '',
     educationLevel: resolveEducationLevel(user.jenjang_id, jenjangList),
+    schoolOrigin: parsed.schoolOrigin,
     major: parsed.major,
     interests: parsed.interests,
     skills: parsed.skills,

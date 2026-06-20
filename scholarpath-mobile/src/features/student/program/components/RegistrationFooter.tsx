@@ -4,31 +4,49 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthColors, FontFamily } from '@/src/theme';
 
 type RegistrationFooterProps = {
-  onSaveDraftPress: () => void;
-  onSubmitPress: () => void;
-  submitDisabled?: boolean;
+  primaryLabel: string;
+  onPrimaryPress: () => void;
+  primaryDisabled?: boolean;
   isSubmitting?: boolean;
+  secondaryLabel?: string;
+  onSecondaryPress?: () => void;
+  secondaryDisabled?: boolean;
+  showSecondary?: boolean;
 };
 
 export function RegistrationFooter({
-  onSaveDraftPress,
-  onSubmitPress,
-  submitDisabled = false,
+  primaryLabel,
+  onPrimaryPress,
+  primaryDisabled = false,
   isSubmitting = false,
+  secondaryLabel = 'Save Draft',
+  onSecondaryPress,
+  secondaryDisabled = false,
+  showSecondary = true,
 }: RegistrationFooterProps) {
   const insets = useSafeAreaInsets();
+  const hasSecondary = showSecondary && onSecondaryPress;
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-      <Pressable style={styles.secondaryButton} onPress={onSaveDraftPress} disabled={isSubmitting}>
-        <Text style={styles.secondaryButtonText}>Save Draft</Text>
-      </Pressable>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      {hasSecondary ? (
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={onSecondaryPress}
+          disabled={isSubmitting || secondaryDisabled}>
+          <Text style={styles.secondaryButtonText}>{secondaryLabel}</Text>
+        </Pressable>
+      ) : null}
       <Pressable
-        style={[styles.primaryButton, (submitDisabled || isSubmitting) && styles.primaryButtonDisabled]}
-        onPress={onSubmitPress}
-        disabled={submitDisabled || isSubmitting}>
+        style={[
+          styles.primaryButton,
+          !hasSecondary && styles.primaryButtonFull,
+          (primaryDisabled || isSubmitting) && styles.primaryButtonDisabled,
+        ]}
+        onPress={onPrimaryPress}
+        disabled={primaryDisabled || isSubmitting}>
         <Text style={styles.primaryButtonText}>
-          {isSubmitting ? 'Submitting...' : 'Submit Application'}
+          {isSubmitting ? 'Memproses...' : primaryLabel}
         </Text>
       </Pressable>
     </View>
@@ -38,16 +56,18 @@ export function RegistrationFooter({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 20,
-    paddingTop: 20,
-    backgroundColor: 'rgba(252, 248, 255, 0.95)',
+    paddingTop: 16,
+    backgroundColor: AuthColors.white,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(199, 196, 215, 0.3)',
+    borderTopColor: 'rgba(199, 196, 215, 0.4)',
   },
   secondaryButton: {
-    flex: 1,
+    minWidth: 108,
     height: 48,
+    paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: AuthColors.profileChipBorder,
@@ -58,8 +78,6 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontFamily: FontFamily.semiBold,
     fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.14,
     color: AuthColors.textSecondary,
   },
   primaryButton: {
@@ -69,20 +87,16 @@ const styles = StyleSheet.create({
     backgroundColor: AuthColors.profileBrand,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
-    elevation: 4,
+  },
+  primaryButtonFull: {
+    flex: 1,
   },
   primaryButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   primaryButtonText: {
     fontFamily: FontFamily.semiBold,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.14,
+    fontSize: 15,
     color: AuthColors.white,
   },
 });

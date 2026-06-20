@@ -22,7 +22,10 @@ import {
   RegistrationFooter,
   RegistrationHeader,
   RegistrationHeroSection,
+  RegistrationProfileSection,
+  RegistrationProgressSteps,
   RequiredDocumentsSection,
+  type RegistrationStep,
 } from '@/src/features/student/program/components';
 import { formatDaysLeftLabel } from '@/src/features/student/program/utils/deadline-countdown';
 import { pickPdfDocument } from '@/src/features/student/program/utils/pick-pdf-document';
@@ -34,19 +37,37 @@ import { uploadRegistrationDocuments } from '@/src/features/student/program/util
 import { getProgramRegistrationConfig } from '@/src/features/student/program/utils/program-registration-config';
 import { ApiError } from '@/src/services/api/client';
 import { parseProgramCompositeId, parsedProgramIdToApiPayload } from '@/src/services/explore';
+import { buildUpdatePayload, getJenjangList, updateProfile } from '@/src/services/profile';
 import { createPendaftaran } from '@/src/services/registration';
 import { type ActiveProgramStatus } from '@/src/types/shared/application';
+import type { EducationLevel } from '@/src/types/shared/program';
 import {
   type ProgramRegistrationDraft,
   type UploadedDocument,
 } from '@/src/types/shared/program-registration';
 import { AuthColors, AuthTypography, FontFamily } from '@/src/theme';
 
-const emptyDraft: ProgramRegistrationDraft = {
-  agreedToTerms: false,
-  documents: {},
-  motivationAnswer: '',
-};
+function createEmptyDraft(
+  fullName = '',
+  educationLevel: EducationLevel | '' = ''
+): ProgramRegistrationDraft {
+  return {
+    agreedToTerms: false,
+    fullName,
+    schoolOrigin: '',
+    educationLevel,
+    documents: {},
+    motivationAnswer: '',
+  };
+}
+
+function isProfileStepComplete(draft: ProgramRegistrationDraft) {
+  return (
+    draft.fullName.trim().length > 0 &&
+    draft.schoolOrigin.trim().length > 0 &&
+    !!draft.educationLevel
+  );
+}
 
 function resolveActiveProgramStatus(
   draft: ProgramRegistrationDraft,
@@ -58,6 +79,7 @@ function resolveActiveProgramStatus(
     mandatoryCvReady && requiredDocumentIds.every((docId) => Boolean(draft.documents[docId]));
   const hasProgress =
     draft.agreedToTerms ||
+    isProfileStepComplete(draft) ||
     Object.keys(draft.documents).length > 0 ||
     draft.motivationAnswer.trim().length > 0;
 
@@ -72,7 +94,8 @@ function resolveActiveProgramStatus(
 
 export function ProgramRegisterScreen() {
   const { id, activeId } = useLocalSearchParams<{ id: string; activeId?: string }>();
-  const { token } = useStudentSession();
+  const { token, fullName, email, educationLevel, major, interests, skills, updateProfile: syncSessionProfile } =
+    useStudentSession();
   const { program, isLoading, error } = useProgramById(id ?? '');
   const {
     activePrograms,
@@ -85,6 +108,8 @@ export function ProgramRegisterScreen() {
     updateActiveProgramStatus,
   } = useApplications();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>('detail');
+  const [educationPickerVisible, setEducationPickerVisible] = useState(false);
 
   const registrationConfig = program ? getProgramRegistrationConfig(program) : null;
 
@@ -97,13 +122,26 @@ export function ProgramRegisterScreen() {
   );
 
   const [draft, setDraft] = useState<ProgramRegistrationDraft>(() =>
-    program ? (getRegistrationDraft(program.id) ?? emptyDraft) : emptyDraft
+    program ? (getRegistrationDraft(program.id) ?? createEmptyDraft()) : createEmptyDraft()
   );
 
   useEffect(() => {
     if (!program) return;
-    setDraft(getRegistrationDraft(program.id) ?? emptyDraft);
-  }, [program?.id]);
+
+    const stored = getRegistrationDraft(program.id);
+    if (stored) {
+      setDraft({
+        ...createEmptyDraft(fullName, educationLevel),
+        ...stored,
+        fullName: stored.fullName?.trim() || fullName,
+        schoolOrigin: stored.schoolOrigin ?? '',
+        educationLevel: stored.educationLevel || educationLevel,
+      });
+      return;
+    }
+
+    setDraft(createEmptyDraft(fullName, educationLevel));
+  }, [program?.id, fullName, educationLevel]);
 
   useEffect(() => {
     if (!program || !registrationConfig) return;
@@ -145,11 +183,12 @@ export function ProgramRegisterScreen() {
     );
   }
 
-  const documentsEnabled = draft.agreedToTerms;
+  const documentsEnabled = draft.agreedToTerms && isProfileStepComplete(draft);
   const needsMandatoryCv = requiresMandatoryCv(program.category);
 
   const isSubmitReady =
     draft.agreedToTerms &&
+    isProfileStepComplete(draft) &&
     (!needsMandatoryCv || Boolean(draft.documents[MANDATORY_CV_DOCUMENT_ID])) &&
     requiredDocumentIds.every((docId) => Boolean(draft.documents[docId])) &&
     draft.motivationAnswer.trim().length > 0;
@@ -199,13 +238,38 @@ export function ProgramRegisterScreen() {
     router.replace('/(tabs)/application' as Href);
   };
 
+  const persistRegistrationProfile = async () => {
+    if (!token) {
+      throw new ApiError('Sesi tidak valid. Silakan login kembali.', 401);
+    }
+
+    const jenjangList = await getJenjangList(token, true);
+    const payload = buildUpdatePayload(
+      {
+        fullName: draft.fullName.trim(),
+        educationLevel: draft.educationLevel,
+        schoolOrigin: draft.schoolOrigin.trim(),
+        major,
+        interests,
+        skills,
+      },
+      jenjangList
+    );
+
+    await updateProfile(token, payload);
+    await syncSessionProfile({
+      fullName: draft.fullName.trim(),
+      educationLevel: draft.educationLevel,
+    });
+  };
+
   const handleSubmit = async () => {
     if (!isSubmitReady) {
       Alert.alert(
         'Form belum lengkap',
         needsMandatoryCv
-          ? 'Setujui syarat, unggah CV wajib, semua dokumen wajib program, dan isi motivasi sebelum submit.'
-          : 'Setujui syarat, unggah semua dokumen wajib program, dan isi motivasi sebelum submit.'
+          ? 'Lengkapi data diri, setujui syarat, unggah CV wajib, semua dokumen wajib program, dan isi motivasi sebelum submit.'
+          : 'Lengkapi data diri, setujui syarat, unggah semua dokumen wajib program, dan isi motivasi sebelum submit.'
       );
       return;
     }
@@ -231,6 +295,8 @@ export function ProgramRegisterScreen() {
     setIsSubmitting(true);
 
     try {
+      await persistRegistrationProfile();
+
       const documents = await uploadRegistrationDocuments({
         token,
         draftDocuments: draft.documents,
@@ -263,6 +329,51 @@ export function ProgramRegisterScreen() {
     }
   };
 
+  const handleDetailContinue = () => {
+    if (!draft.agreedToTerms) {
+      Alert.alert('Syarat & ketentuan', 'Setujui syarat dan ketentuan untuk melanjutkan.');
+      return;
+    }
+    syncDraft(draft);
+    setCurrentStep('profile');
+  };
+
+  const handleProfileContinue = () => {
+    if (!isProfileStepComplete(draft)) {
+      Alert.alert('Data diri belum lengkap', 'Isi nama lengkap, asal sekolah, dan jenjang pendidikan.');
+      return;
+    }
+    syncDraft(draft);
+    setCurrentStep('documents');
+  };
+
+  const footerProps =
+    currentStep === 'detail'
+      ? {
+          showSecondary: false,
+          primaryLabel: 'Lanjut',
+          onPrimaryPress: handleDetailContinue,
+          primaryDisabled: !draft.agreedToTerms,
+        }
+      : currentStep === 'profile'
+        ? {
+            secondaryLabel: 'Kembali',
+            onSecondaryPress: () => setCurrentStep('detail'),
+            primaryLabel: 'Lanjut',
+            onPrimaryPress: handleProfileContinue,
+            primaryDisabled: !isProfileStepComplete(draft),
+          }
+        : {
+            secondaryLabel: 'Save Draft',
+            onSecondaryPress: handleSaveDraft,
+            primaryLabel: 'Submit Application',
+            onPrimaryPress: () => {
+              void handleSubmit();
+            },
+            primaryDisabled: !isSubmitReady,
+            isSubmitting,
+          };
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -279,57 +390,75 @@ export function ProgramRegisterScreen() {
           deadlineAt={registrationConfig.deadlineAt}
         />
 
-        <EligibilityTermsSection
-          terms={registrationConfig.eligibilityTerms}
-          agreed={draft.agreedToTerms}
-          onAgreedChange={(agreed) => syncDraft({ ...draft, agreedToTerms: agreed })}
-        />
+        <RegistrationProgressSteps currentStep={currentStep} />
 
-        {needsMandatoryCv ? (
-          <MandatoryDocumentSection
-            disabled={!documentsEnabled}
-            uploaded={draft.documents[MANDATORY_CV_DOCUMENT_ID] as UploadedDocument | undefined}
-            onUploadPress={() => handleUpload(MANDATORY_CV_DOCUMENT_ID)}
+        {currentStep === 'detail' ? (
+          <EligibilityTermsSection
+            terms={registrationConfig.eligibilityTerms}
+            agreed={draft.agreedToTerms}
+            onAgreedChange={(agreed) => syncDraft({ ...draft, agreedToTerms: agreed })}
           />
         ) : null}
 
-        <RequiredDocumentsSection
-          disabled={!documentsEnabled}
-          requirements={registrationConfig.requiredDocuments}
-          documents={draft.documents}
-          onUploadPress={handleUpload}
-        />
-
-        <View style={[styles.section, !documentsEnabled && styles.sectionDisabled]}>
-          <Text style={styles.motivationLabel}>{registrationConfig.motivationQuestion}</Text>
-          <TextInput
-            style={styles.motivationInput}
-            placeholder="Answer here..."
-            placeholderTextColor={AuthColors.textPlaceholder}
-            multiline
-            textAlignVertical="top"
-            editable={documentsEnabled}
-            value={draft.motivationAnswer}
-            onChangeText={(motivationAnswer) =>
-              setDraft((prev) => ({ ...prev, motivationAnswer }))
+        {currentStep === 'profile' ? (
+          <RegistrationProfileSection
+            fullName={draft.fullName}
+            email={email}
+            schoolOrigin={draft.schoolOrigin}
+            educationLevel={draft.educationLevel}
+            onFullNameChange={(value) => setDraft((prev) => ({ ...prev, fullName: value }))}
+            onSchoolOriginChange={(value) => setDraft((prev) => ({ ...prev, schoolOrigin: value }))}
+            onEducationLevelChange={(value) =>
+              setDraft((prev) => ({ ...prev, educationLevel: value }))
             }
-            onBlur={() => {
-              if (documentsEnabled) {
-                syncDraft(draft);
-              }
-            }}
+            educationPickerVisible={educationPickerVisible}
+            onEducationPickerOpen={() => setEducationPickerVisible(true)}
+            onEducationPickerClose={() => setEducationPickerVisible(false)}
           />
-        </View>
+        ) : null}
+
+        {currentStep === 'documents' ? (
+          <>
+            {needsMandatoryCv ? (
+              <MandatoryDocumentSection
+                disabled={!documentsEnabled}
+                uploaded={draft.documents[MANDATORY_CV_DOCUMENT_ID] as UploadedDocument | undefined}
+                onUploadPress={() => handleUpload(MANDATORY_CV_DOCUMENT_ID)}
+              />
+            ) : null}
+
+            <RequiredDocumentsSection
+              disabled={!documentsEnabled}
+              requirements={registrationConfig.requiredDocuments}
+              documents={draft.documents}
+              onUploadPress={handleUpload}
+            />
+
+            <View style={[styles.section, !documentsEnabled && styles.sectionDisabled]}>
+              <Text style={styles.motivationLabel}>{registrationConfig.motivationQuestion}</Text>
+              <TextInput
+                style={styles.motivationInput}
+                placeholder="Answer here..."
+                placeholderTextColor={AuthColors.textPlaceholder}
+                multiline
+                textAlignVertical="top"
+                editable={documentsEnabled}
+                value={draft.motivationAnswer}
+                onChangeText={(motivationAnswer) =>
+                  setDraft((prev) => ({ ...prev, motivationAnswer }))
+                }
+                onBlur={() => {
+                  if (documentsEnabled) {
+                    syncDraft(draft);
+                  }
+                }}
+              />
+            </View>
+          </>
+        ) : null}
       </ScrollView>
 
-      <RegistrationFooter
-        onSaveDraftPress={handleSaveDraft}
-        onSubmitPress={() => {
-          void handleSubmit();
-        }}
-        submitDisabled={!isSubmitReady}
-        isSubmitting={isSubmitting}
-      />
+      <RegistrationFooter {...footerProps} />
     </KeyboardAvoidingView>
   );
 }

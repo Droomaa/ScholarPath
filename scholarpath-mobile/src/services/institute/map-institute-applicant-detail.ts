@@ -1,3 +1,4 @@
+import { DEFAULT_MOTIVATION_QUESTION } from '@/src/features/student/program/constants/program-registration-defaults';
 import { resolveUploadUrl } from '@/src/services/api/resolve-upload-url';
 import { parseKeahlian } from '@/src/services/profile/map-profile';
 import {
@@ -79,16 +80,18 @@ function buildSkillsFromKeahlian(keahlian: string): ApplicantSkill[] {
   return parsed.skills.map((name) => ({ name, level: 'Advanced' as const }));
 }
 
-function buildAchievementsFromKeahlian(keahlian: string): ApplicantAchievement[] {
-  const parsed = parseKeahlian(keahlian);
-  if (!parsed.interests.length) {
+function buildMotivationSection(motivationText: string): ApplicantAchievement[] {
+  const answer = motivationText?.trim();
+  if (!answer) {
     return [];
   }
 
-  return parsed.interests.map((interest) => ({
-    title: interest,
-    description: 'Listed in student profile interests.',
-  }));
+  return [
+    {
+      title: DEFAULT_MOTIVATION_QUESTION,
+      description: answer,
+    },
+  ];
 }
 
 export function mapInstansiApplicantDetail(
@@ -99,11 +102,17 @@ export function mapInstansiApplicantDetail(
       ? record.major
       : parseKeahlian(record.keahlian ?? '').major || '—';
 
+  const schoolOrigin =
+    record.asal_sekolah?.trim() && record.asal_sekolah !== '—'
+      ? record.asal_sekolah
+      : parseKeahlian(record.keahlian ?? '').schoolOrigin || '—';
+
   return {
     id: `pendaftaran-${record.pendaftaran_id}`,
     pendaftaranId: record.pendaftaran_id,
     name: record.student_name,
     major,
+    schoolOrigin,
     programId: buildProgramId(record.program_type, record.program_title),
     programTitle: record.program_title,
     programType: record.program_type,
@@ -116,7 +125,7 @@ export function mapInstansiApplicantDetail(
     educationLevel: record.jenjang_nama?.trim() || '—',
     trackLabel: `${major} Track`,
     skills: buildSkillsFromKeahlian(record.keahlian ?? ''),
-    achievements: buildAchievementsFromKeahlian(record.keahlian ?? ''),
+    achievements: buildMotivationSection(record.motivation_text ?? ''),
     mandatoryDocuments: (record.mandatory_documents ?? []).map(mapApplicantDocument),
     otherDocuments: (record.other_documents ?? []).map(mapApplicantDocument),
   };

@@ -4,6 +4,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "start:usb": "expo start --localhost -c",
+    "adb:reverse": "adb reverse tcp:8081 tcp:8081 && adb reverse tcp:8080 tcp:8080",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",

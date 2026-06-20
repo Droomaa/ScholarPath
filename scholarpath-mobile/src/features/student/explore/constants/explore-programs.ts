@@ -178,11 +178,13 @@ export function getProgramById(id: string) {
   return exploreProgramCache.find((program) => program.id === id);
 }
 
-export function getJenjangOptions(userEducationLevel: string) {
+import type { JenjangFilterValue } from '@/src/features/student/explore/components/JenjangFilter';
+
+export function getJenjangFilterOptions(userEducationLevel: string): readonly JenjangFilterValue[] {
   if (userEducationLevel === 'SMA') {
-    return ['SMA'] as const;
+    return ['semua', 'SMA'];
   }
-  return ['SMP', 'SMA'] as const;
+  return ['semua', 'SMP', 'SMA'];
 }
 
 export function getProgramShareMessage(program: ExploreProgram) {

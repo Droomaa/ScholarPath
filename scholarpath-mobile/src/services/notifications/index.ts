@@ -1,2 +1,6 @@
 export { getNotifications } from './notification-api';
-export { mapNotificationRecord, mapNotificationRecords } from './map-notifications';
+export {
+  mapNotificationRecord,
+  mapNotificationRecords,
+  mergeStudentNotifications,
+} from './map-notifications';

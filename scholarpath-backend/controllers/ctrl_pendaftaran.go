@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
@@ -41,20 +42,21 @@ type ApplicantDocumentDetail struct {
 }
 
 type ApplicantDetailResponse struct {
-	PendaftaranID  uint                    `json:"pendaftaran_id"`
-	StudentID      uint                    `json:"student_id"`
-	StudentName    string                  `json:"student_name"`
-	StudentEmail   string                  `json:"student_email"`
-	JenjangNama    string                  `json:"jenjang_nama"`
-	Major          string                  `json:"major"`
-	Keahlian       string                  `json:"keahlian"`
-	MotivationText string                  `json:"motivation_text"`
-	ProgramType    string                  `json:"program_type"`
-	ProgramTitle   string                  `json:"program_title"`
-	StatusID       *uint                   `json:"status_id"`
-	TanggalDaftar  time.Time               `json:"tanggal_daftar"`
-	MandatoryDocuments []ApplicantDocumentDetail `json:"mandatory_documents"`
-	OtherDocuments     []ApplicantDocumentDetail `json:"other_documents"`
+	PendaftaranID      uint                      `json:"pendaftaran_id"`
+	StudentID          uint                      `json:"student_id"`
+	StudentName        string                    `json:"student_name"`
+	StudentEmail       string                    `json:"student_email"`
+	JenjangNama        string                    `json:"jenjang_nama"`
+	AsalSekolah        string                    `json:"asal_sekolah"`
+	Major              string                    `json:"major"`
+	Keahlian           string                    `json:"keahlian"`
+	MotivationText     string                    `json:"motivation_text"`
+	ProgramType        string                    `json:"program_type"`
+	ProgramTitle       string                    `json:"program_title"`
+	StatusID           *uint                     `json:"status_id"`
+	TanggalDaftar      time.Time                 `json:"tanggal_daftar"`
+	MandatoryDocuments []ApplicantDocumentDetail `json:"mandatory_documents" gorm:"-"`
+	OtherDocuments     []ApplicantDocumentDetail `json:"other_documents" gorm:"-"`
 }
 
 type CreatePendaftaranDocumentInput struct {
@@ -91,10 +93,12 @@ func CreatePendaftaran(c *gin.Context) {
 		return
 	}
 
+	pendingStatusID := uint(1)
 	pendaftaran := models.Pendaftaran{
 		UserID:         userID,
 		BeasiswaID:     input.BeasiswaID,
 		OlimpiadeID:    input.OlimpiadeID,
+		StatusID:       &pendingStatusID,
 		MotivationText: input.MotivationText,
 		TanggalDaftar:  time.Now(),
 	}
@@ -358,6 +362,7 @@ func GetInstansiApplicantDetail(c *gin.Context) {
 	}
 
 	detail.Major = parseMajorFromKeahlian(detail.Keahlian)
+	detail.AsalSekolah = parseSchoolFromKeahlian(detail.Keahlian)
 
 	var documents []ApplicantDocumentDetail
 	if err := koneksi.DB.Table("pendaftaran_dokumens").
@@ -390,6 +395,25 @@ func parseMajorFromKeahlian(keahlian string) string {
 		part = strings.TrimSpace(part)
 		if strings.HasPrefix(part, "Jurusan:") {
 			value := strings.TrimSpace(strings.TrimPrefix(part, "Jurusan:"))
+			if value != "" && value != "-" {
+				return value
+			}
+		}
+	}
+
+	return "—"
+}
+
+func parseSchoolFromKeahlian(keahlian string) string {
+	if keahlian == "" {
+		return "—"
+	}
+
+	parts := strings.Split(keahlian, " | ")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "Asal Sekolah:") {
+			value := strings.TrimSpace(strings.TrimPrefix(part, "Asal Sekolah:"))
 			if value != "" && value != "-" {
 				return value
 			}
@@ -454,8 +478,15 @@ func UpdateApplicantStatus(c *gin.Context) {
 	}
 
 	// Eksekusi perubahan status
+	previousStatusID := pendaftaran.StatusID
 	pendaftaran.StatusID = &input.StatusID
 	koneksi.DB.Save(&pendaftaran)
+
+	if input.StatusID == 2 || input.StatusID == 3 {
+		if previousStatusID == nil || *previousStatusID != input.StatusID {
+			createStudentApplicationStatusNotification(pendaftaran, input.StatusID)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Status pendaftaran siswa berhasil diperbarui!",
@@ -506,4 +537,50 @@ func GetRiwayatPendaftaranSiswa(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": riwayat})
+}
+
+func resolveProgramTitle(pendaftaran models.Pendaftaran) string {
+	if pendaftaran.BeasiswaID != nil {
+		var beasiswa models.Beasiswa
+		if err := koneksi.DB.First(&beasiswa, pendaftaran.BeasiswaID).Error; err == nil {
+			return beasiswa.Nama
+		}
+	}
+
+	if pendaftaran.OlimpiadeID != nil {
+		var olimpiade models.Olimpiade
+		if err := koneksi.DB.First(&olimpiade, pendaftaran.OlimpiadeID).Error; err == nil {
+			return olimpiade.Judul
+		}
+	}
+
+	return "program ini"
+}
+
+func createStudentApplicationStatusNotification(pendaftaran models.Pendaftaran, statusID uint) {
+	programTitle := resolveProgramTitle(pendaftaran)
+
+	var title, message string
+	switch statusID {
+	case 2:
+		title = "Pendaftaran Diterima"
+		message = fmt.Sprintf(
+			"Selamat! Pendaftaran kamu untuk program \"%s\" telah diterima oleh instansi.",
+			programTitle,
+		)
+	case 3:
+		title = "Pendaftaran Ditolak"
+		message = fmt.Sprintf(
+			"Pendaftaran kamu untuk program \"%s\" belum diterima. Cek detailnya di Track Application.",
+			programTitle,
+		)
+	default:
+		return
+	}
+
+	koneksi.DB.Create(&models.Notification{
+		UserID:  pendaftaran.UserID,
+		Title:   title,
+		Message: message,
+	})
 }

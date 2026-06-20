@@ -16,26 +16,27 @@ import {
   ExploreCategory,
   ExploreSearchBar,
   JenjangFilter,
+  type JenjangFilterValue,
   ProgramListCard,
   SortOption,
   SortToggle,
 } from '@/src/features/student/explore/components';
-import { getJenjangOptions } from '@/src/features/student/explore/constants/explore-programs';
+import { getJenjangFilterOptions } from '@/src/features/student/explore/constants/explore-programs';
 import { HomeTopBar } from '@/src/features/student/home/components';
-import { EducationLevel } from '@/src/types/shared/program';
+import { filterProgramsForStudentLevel } from '@/src/services/explore/resolve-education-levels';
 import { AuthColors, AuthTypography } from '@/src/theme';
 
-function getDefaultJenjang(
-  options: readonly EducationLevel[],
+function getDefaultJenjangFilter(
+  options: readonly JenjangFilterValue[],
   userEducationLevel: string
-): EducationLevel {
+): JenjangFilterValue {
   if (userEducationLevel === 'SMA' && options.includes('SMA')) {
     return 'SMA';
   }
   if (userEducationLevel === 'SMP' && options.includes('SMP')) {
     return 'SMP';
   }
-  return options[0];
+  return options[0] ?? 'semua';
 }
 
 export function StudentExploreScreen() {
@@ -44,23 +45,25 @@ export function StudentExploreScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const jenjangOptions = useMemo(
-    () => getJenjangOptions(educationLevel),
+    () => getJenjangFilterOptions(educationLevel),
     [educationLevel]
   );
 
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState<ExploreCategory>('semua');
-  const [selectedJenjang, setSelectedJenjang] = useState<EducationLevel>(() =>
-    getDefaultJenjang(jenjangOptions, educationLevel)
+  const [selectedJenjang, setSelectedJenjang] = useState<JenjangFilterValue>(() =>
+    getDefaultJenjangFilter(jenjangOptions, educationLevel)
   );
   const [sortBy, setSortBy] = useState<SortOption>('terbaru');
 
   const filteredPrograms = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    let results = programs.filter((program) =>
-      program.educationLevels.includes(selectedJenjang)
-    );
+    let results = filterProgramsForStudentLevel(programs, educationLevel);
+
+    if (selectedJenjang !== 'semua') {
+      results = results.filter((program) => program.educationLevels.includes(selectedJenjang));
+    }
 
     if (category !== 'semua') {
       results = results.filter((program) => program.category === category);
@@ -77,7 +80,7 @@ export function StudentExploreScreen() {
     return [...results].sort((a, b) =>
       sortBy === 'terbaru' ? b.sortDate - a.sortDate : b.popularity - a.popularity
     );
-  }, [category, programs, searchQuery, selectedJenjang, sortBy]);
+  }, [category, educationLevel, programs, searchQuery, selectedJenjang, sortBy]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
