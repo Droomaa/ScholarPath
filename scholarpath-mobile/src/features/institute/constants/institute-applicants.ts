@@ -1,0 +1,141 @@
+import { type ApplicantStatus, type InstituteApplicant, type InstituteProgram } from '@/src/types/institute/institute';
+import { applicantMatchesProgram } from '@/src/services/institute/map-institute-programs';
+
+export const DEFAULT_INSTITUTE_APPLICANTS: InstituteApplicant[] = [
+  {
+    id: 'app-1',
+    pendaftaranId: 1,
+    name: 'Andi Saputra',
+    major: 'Science',
+    programId: 'prog-tech-innovators',
+    programTitle: 'Tech Innovators Grant',
+    status: 'pending',
+    isOnline: true,
+    studentRegistrationId: 'reg-tech-andi',
+  },
+  {
+    id: 'app-2',
+    pendaftaranId: 2,
+    name: 'Siti Rahmawati',
+    major: 'Language',
+    programId: 'prog-leadership-award',
+    programTitle: 'Global Leadership Award',
+    status: 'accepted',
+  },
+  {
+    id: 'app-3',
+    pendaftaranId: 3,
+    name: 'Budi Hartono',
+    major: 'Social',
+    programId: 'prog-women-stem',
+    programTitle: 'Women in STEM 2024',
+    status: 'rejected',
+  },
+  {
+    id: 'app-4',
+    pendaftaranId: 4,
+    name: 'Dewi Lestari',
+    major: 'STEM',
+    programId: 'prog-stem-fellowship',
+    programTitle: 'STEM Research Fellowship',
+    status: 'pending',
+    studentRegistrationId: 'reg-stem-dewi',
+  },
+  {
+    id: 'app-5',
+    pendaftaranId: 5,
+    name: 'Amara Syarianti',
+    major: 'STEM',
+    programId: 'prog-stem-fellowship',
+    programTitle: 'STEM Research Fellowship',
+    status: 'pending',
+    studentRegistrationId: 'reg-stem-amara',
+  },
+  {
+    id: 'app-6',
+    pendaftaranId: 6,
+    name: 'Maya Anggraini',
+    major: 'Arts',
+    programId: 'prog-digital-leadership',
+    programTitle: 'Digital Leadership Program',
+    status: 'accepted',
+  },
+  {
+    id: 'app-7',
+    pendaftaranId: 7,
+    name: 'Fajar Nugroho',
+    major: 'Science',
+    programId: 'prog-tech-innovators',
+    programTitle: 'Tech Innovators Grant',
+    status: 'pending',
+    studentRegistrationId: 'reg-tech-fajar',
+  },
+  {
+    id: 'app-8',
+    pendaftaranId: 8,
+    name: 'Putri Maharani',
+    major: 'Social',
+    programId: 'prog-leadership-award',
+    programTitle: 'Global Leadership Award',
+    status: 'pending',
+    studentRegistrationId: 'reg-leadership-putri',
+  },
+];
+
+export function filterApplicants(
+  applicants: InstituteApplicant[],
+  options: {
+    status?: ApplicantStatus | 'all';
+    programId?: string;
+    query?: string;
+    programs?: InstituteProgram[];
+  }
+) {
+  const { status = 'all', programId, query = '', programs = [] } = options;
+
+  return applicants.filter((applicant) => {
+    if (status !== 'all' && applicant.status !== status) return false;
+
+    if (programId && programId !== 'all') {
+      const matchedProgram = programs.find((program) => program.id === programId);
+      if (matchedProgram) {
+        if (!applicantMatchesProgram(applicant, matchedProgram)) return false;
+      } else if (applicant.programId !== programId) {
+        return false;
+      }
+    }
+
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      return (
+        applicant.name.toLowerCase().includes(q) ||
+        applicant.programTitle.toLowerCase().includes(q) ||
+        applicant.major.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+}
+
+export function getInstituteStats(applicants: InstituteApplicant[] = DEFAULT_INSTITUTE_APPLICANTS) {
+  const totalApplicants = applicants.length;
+  const pendingReviews = applicants.filter((a) => a.status === 'pending').length;
+  const accepted = applicants.filter((a) => a.status === 'accepted').length;
+  const activePrograms = 3;
+
+  return {
+    activePrograms,
+    totalApplicants: 1248,
+    pendingReviews: 56,
+    accepted: 218,
+    activeProgramsCount: activePrograms,
+    displayedApplicants: totalApplicants,
+  };
+}
+
+export function getApplicantById(id: string, applicants: InstituteApplicant[] = DEFAULT_INSTITUTE_APPLICANTS) {
+  return applicants.find((applicant) => applicant.id === id);
+}
+
+/** @deprecated Use useInstituteApplicants().applicants for live status updates */
+export const INSTITUTE_APPLICANTS = DEFAULT_INSTITUTE_APPLICANTS;
