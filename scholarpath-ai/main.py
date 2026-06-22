@@ -1,12 +1,14 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sklearn.metrics.pairwise import cosine_similarity
 # Import kelas canggih dari ai_matcher_fix.py
 from ai_matcher_fix import ScholarPathMatcher
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
 
+# Wajib ditambahkan agar browser mengizinkan pengiriman POST request
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,7 +29,6 @@ class MatchRequest(BaseModel):
     beasiswa_requirement: str = None    # Ditambahkan agar kompatibel dengan Golang lama
     filter_type: str = None
     top_k: int = 3
-    live_programs: list = []            # Bypass auth Go backend
 
 @app.post("/api/match")
 def calculate_match(data: MatchRequest):
@@ -55,7 +56,7 @@ def calculate_match(data: MatchRequest):
             }
 
         # =====================================================================
-        # SKENARIO B: GOLANG BARU / FRONTEND DIRECT (Mencari Top K dari CSV & Live Data)
+        # SKENARIO B: GOLANG BARU / FRONTEND DIRECT (Mencari Top K dari CSV)
         # =====================================================================
         query_text = data.user_skill if data.user_skill else data.user_profile
         if not query_text:
@@ -63,10 +64,25 @@ def calculate_match(data: MatchRequest):
             
         results_df = matcher.search(
             query=query_text,
-            live_programs=data.live_programs,
             top_k=data.top_k,
             filter_type=data.filter_type
         )
+        
+        # --- PERBAIKAN FINAL: Paksa semua nama kolom menjadi huruf kecil ---
+        results_df.columns = results_df.columns.str.lower()
+        
+        # Samakan nama kolom untuk Golang
+        if "match_score" in results_df.columns:
+            results_df.rename(columns={"match_score": "match_score_percentage"}, inplace=True)
+        elif "similarity" in results_df.columns:
+            results_df.rename(columns={"similarity": "match_score_percentage"}, inplace=True)
+            
+        # Jaga-jaga kalau header CSV aslinya beda nama
+        if "program_name" in results_df.columns:
+            results_df.rename(columns={"program_name": "title"}, inplace=True)
+        elif "judul" in results_df.columns:
+            results_df.rename(columns={"judul": "title"}, inplace=True)
+        # -------------------------------------------------------------------
         
         results_list = results_df.to_dict(orient="records")
         
@@ -78,6 +94,27 @@ def calculate_match(data: MatchRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal memproses AI: {str(e)}")
+
+# =====================================================================
+# RUTE BARU: SINKRONISASI OTOMATIS DARI GOLANG
+# =====================================================================
+@app.post("/api/reload-csv")
+def reload_ai_memory():
+    global matcher # Akses matcher utama agar bisa ditimpa dengan data baru
+    try:
+        print("🔄 Menerima perintah dari Golang: Mengisi ulang otak AI dari CSV baru...")
+        
+        # Inisialisasi ulang object Matcher agar membaca CSV yang baru saja di-update Golang
+        matcher = ScholarPathMatcher('new_sample_dataset.csv', API_KEY)
+        
+        print("✅ Sinkronisasi Selesai! Mesin AI siap dengan data terbaru.")
+        return {
+            "status": "success", 
+            "message": "Dataset AI berhasil diperbarui di RAM dan siap melayani pencarian baru!"
+        }
+    except Exception as e:
+        print(f"❌ Gagal memuat ulang CSV: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal memuat ulang CSV: {str(e)}")
 
 @app.get("/")
 def health_check():

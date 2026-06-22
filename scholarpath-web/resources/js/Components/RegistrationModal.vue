@@ -212,7 +212,12 @@ const submitRegistration = async () => {
                 formData.append('olimpiade_id', props.program.id);
             }
             
-            formData.append('alasan', formFiles.value.alasan);
+            let finalAlasan = formFiles.value.alasan;
+            if (props.program.is_ai_recommendation) {
+                finalAlasan = `[AI-PROGRAM: ${props.program.title}] ` + finalAlasan;
+            }
+            
+            formData.append('alasan', finalAlasan);
             formData.append('resume', formFiles.value.resume);
             formData.append('report_card', formFiles.value.report_card);
             formData.append('proposal', formFiles.value.proposal);

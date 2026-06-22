@@ -44,4 +44,12 @@ func KoneksiDatabase() {
 	} else {
 		log.Println("Schema database berhasil disinkronisasi melalui GORM AutoMigrate!")
 	}
+
+	// Reset PostgreSQL sequences agar tidak terjadi duplicate key error
+	// (terjadi jika data pernah diinsert manual tanpa melewati sequence)
+	sequenceTables := []string{"beasiswas", "olimpiades", "instansis", "users", "pendaftarans", "notifications", "wishlists"}
+	for _, table := range sequenceTables {
+		DB.Exec(`SELECT setval(pg_get_serial_sequence('` + table + `', 'id'), COALESCE((SELECT MAX(id) FROM ` + table + `), 0) + 1, false)`)
+	}
+	log.Println("Sequence database berhasil direset!")
 }

@@ -252,6 +252,40 @@ const toggleNotifications = () => {
     }
 };
 
+const getNotificationStyles = (item) => {
+    const text = (item.title + ' ' + item.message).toLowerCase();
+    
+    if (text.includes('diterima') || text.includes('accept') || text.includes('berhasil') || text.includes('disetujui')) {
+        return {
+            container: 'bg-emerald-50/80 dark:bg-emerald-900/20 border-l-4 border-emerald-500',
+            title: 'text-emerald-800 dark:text-emerald-400',
+            message: 'text-emerald-600 dark:text-emerald-300'
+        };
+    }
+    
+    if (text.includes('ditolak') || text.includes('reject') || text.includes('gagal') || text.includes('tidak memenuhi')) {
+        return {
+            container: 'bg-red-50/80 dark:bg-red-900/20 border-l-4 border-red-500',
+            title: 'text-red-800 dark:text-red-400',
+            message: 'text-red-600 dark:text-red-300'
+        };
+    }
+    
+    if (text.includes('menunggu') || text.includes('pending') || text.includes('terkirim') || text.includes('review')) {
+        return {
+            container: 'bg-amber-50/80 dark:bg-amber-900/20 border-l-4 border-amber-500',
+            title: 'text-amber-800 dark:text-amber-400',
+            message: 'text-amber-700 dark:text-amber-300'
+        };
+    }
+    
+    return {
+        container: 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-l-4 border-transparent',
+        title: 'text-slate-800 dark:text-slate-200',
+        message: 'text-slate-600 dark:text-slate-400'
+    };
+};
+
 onMounted(() => {
     // Read local theme first for faster apply
     const localTheme = localStorage.getItem('theme');
@@ -608,15 +642,16 @@ onMounted(() => {
                                 <div
                                     v-for="item in notificationsList"
                                     :key="item.id"
-                                    class="px-4 py-3 hover:bg-slate-50/50 transition duration-150"
+                                    class="px-4 py-3 transition duration-150"
+                                    :class="getNotificationStyles(item).container"
                                 >
                                     <div class="flex items-start justify-between gap-1">
-                                        <h5 class="text-xs font-bold text-slate-800">{{ item.title }}</h5>
+                                        <h5 class="text-xs font-bold" :class="getNotificationStyles(item).title">{{ item.title }}</h5>
                                         <span class="text-[9px] text-slate-400 font-medium shrink-0">
                                             {{ new Date(item.date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) }}
                                         </span>
                                     </div>
-                                    <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">{{ item.message }}</p>
+                                    <p class="text-[11px] mt-1 leading-relaxed" :class="getNotificationStyles(item).message">{{ item.message }}</p>
                                 </div>
                             </div>
                         </div>

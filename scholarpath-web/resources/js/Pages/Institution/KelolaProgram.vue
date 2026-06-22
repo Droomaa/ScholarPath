@@ -8,6 +8,8 @@ const listPrograms = ref([]);
 const listApplicants = ref([]);
 const instansiProfile = ref(null);
 const isLoading = ref(false);
+const userRole = ref(null);
+const allInstansis = ref([]);
 const messageToast = ref({ text: '', type: '' });
 
 // Modal states
@@ -35,6 +37,7 @@ const beasiswaForm = ref({
     nominal_pendanaan: null,
     link_informasi: '',
     deadline: '',
+    instansi_id: null,
     posterFile: null
 });
 
@@ -47,6 +50,7 @@ const olimpiadeForm = ref({
     biaya_pendaftaran: null,
     link_informasi: '',
     deadline: '',
+    instansi_id: null,
     posterFile: null
 });
 
@@ -106,6 +110,7 @@ const fetchData = async () => {
             headers: { Authorization: `Bearer ${token}` }
         });
         userId = resUser.data.data.id;
+        userRole.value = resUser.data.data.role;
     } catch (e) {
         console.warn('Failed to load user profile:', e?.response?.status);
     }
@@ -146,8 +151,9 @@ const fetchData = async () => {
         const resAllInstansi = await axios.get(`${backendUrl}/instansi`, {
             headers: { Authorization: `Bearer ${token}` }
         });
+        allInstansis.value = resAllInstansi.data.data || [];
         if (userId) {
-            instansiProfile.value = (resAllInstansi.data.data || []).find(i => i.user_id === userId);
+            instansiProfile.value = allInstansis.value.find(i => i.user_id === userId);
         }
     } catch (e) {
         console.warn('Failed to load instansi list:', e?.response?.status);
@@ -287,11 +293,11 @@ const resetCreateForm = () => {
     programType.value = 'Beasiswa';
     beasiswaForm.value = {
         nama: '', deskripsi: '', kuota_pendaftar: null, tipe_beasiswa: 'Fully Funded',
-        nominal_pendanaan: null, link_informasi: '', deadline: '', posterFile: null
+        nominal_pendanaan: null, link_informasi: '', deadline: '', instansi_id: null, posterFile: null
     };
     olimpiadeForm.value = {
         judul: '', deskripsi: '', tipe_lomba: 'Sains', kuota: null,
-        biaya_pendaftaran: null, link_informasi: '', deadline: '', posterFile: null
+        biaya_pendaftaran: null, link_informasi: '', deadline: '', instansi_id: null, posterFile: null
     };
     defaultRequirements.value = [
         { id: 1, label: 'KTP / NISN', enabled: true, isDefault: true },
@@ -324,6 +330,11 @@ const goToStep2 = () => {
     
     if (!nameField || !form.deskripsi || !form.deadline || !typeField || !quotaField || amountField === null || !form.link_informasi) {
         showToast('Harap isi semua field wajib sebelum melanjutkan.', 'error');
+        return;
+    }
+    
+    if (userRole.value === 'admin' && !form.instansi_id) {
+        showToast('Harap pilih instansi untuk program ini.', 'error');
         return;
     }
     
@@ -366,6 +377,14 @@ const handleCreateProgram = async () => {
             posterUrl = uploadRes.data.file_url;
         }
 
+        // Determine instansi_id
+        let finalInstansiId = null;
+        if (userRole.value === 'admin') {
+            finalInstansiId = parseInt(currentForm.instansi_id);
+        } else if (instansiProfile.value) {
+            finalInstansiId = instansiProfile.value.id;
+        }
+
         if (programType.value === 'Beasiswa') {
             const payload = {
                 nama: beasiswaForm.value.nama,
@@ -376,7 +395,8 @@ const handleCreateProgram = async () => {
                 link_informasi: beasiswaForm.value.link_informasi,
                 deadline: beasiswaForm.value.deadline ? `${beasiswaForm.value.deadline}T23:59:59Z` : new Date().toISOString(),
                 gambar_poster: posterUrl,
-                persyaratan: enabledRequirements
+                persyaratan: enabledRequirements,
+                instansi_id: finalInstansiId
             };
             await axios.post(`${backendUrl}/beasiswa`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -391,7 +411,8 @@ const handleCreateProgram = async () => {
                 link_informasi: olimpiadeForm.value.link_informasi,
                 deadline: olimpiadeForm.value.deadline ? `${olimpiadeForm.value.deadline}T23:59:59Z` : new Date().toISOString(),
                 gambar_poster: posterUrl,
-                persyaratan: enabledRequirements
+                persyaratan: enabledRequirements,
+                instansi_id: finalInstansiId
             };
             await axios.post(`${backendUrl}/olimpiade`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
@@ -769,6 +790,13 @@ onMounted(() => {
 
                             <!-- Beasiswa Form -->
                             <div v-if="programType === 'Beasiswa'" class="bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+                                <div v-if="userRole === 'admin'">
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Pilih Instansi Penyelenggara *</label>
+                                    <select v-model="beasiswaForm.instansi_id" required class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm appearance-none cursor-pointer">
+                                        <option :value="null" disabled>Pilih Instansi</option>
+                                        <option v-for="inst in allInstansis" :key="inst.id" :value="inst.id">{{ inst.nama }}</option>
+                                    </select>
+                                </div>
                                 <div>
                                     <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Nama Beasiswa *</label>
                                     <input type="text" v-model="beasiswaForm.nama" required placeholder="Contoh: Beasiswa Sains Mandiri" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />
@@ -817,6 +845,13 @@ onMounted(() => {
 
                             <!-- Lomba Form -->
                             <div v-else class="bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-4">
+                                <div v-if="userRole === 'admin'">
+                                    <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Pilih Instansi Penyelenggara *</label>
+                                    <select v-model="olimpiadeForm.instansi_id" required class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm appearance-none cursor-pointer">
+                                        <option :value="null" disabled>Pilih Instansi</option>
+                                        <option v-for="inst in allInstansis" :key="inst.id" :value="inst.id">{{ inst.nama }}</option>
+                                    </select>
+                                </div>
                                 <div>
                                     <label class="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">Judul Olimpiade *</label>
                                     <input type="text" v-model="olimpiadeForm.judul" required placeholder="Contoh: Olimpiade Sains Nasional" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-white transition outline-none shadow-sm" />

@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import time
-import requests
 from sentence_transformers import SentenceTransformer
 from rank_bm25 import BM25Okapi
 from sklearn.metrics.pairwise import cosine_similarity
@@ -9,85 +8,26 @@ from google import genai
 
 class ScholarPathMatcher:
     def __init__(self, dataset_path, gemini_api_key):
-        self.dataset_path = dataset_path
+        self.df = pd.read_csv(dataset_path)
         
+        # --- PERBAIKAN: Mengatasi NaN/Kosong agar tidak error saat digabung ---
+        self.df.fillna("", inplace=True)
+        
+        # --- PERBAIKAN: Merakit teks hanya dari kolom yang dicetak Golang ---
+        self.df['search_content'] = (
+            self.df['title'].astype(str) + " " + 
+            self.df['description'].astype(str) + " " +
+            self.df['level'].astype(str)
+        ).str.lower()
+
         self.semantic_model = SentenceTransformer('paraphrase-multilingual-mpnet-base-v2')
+        self.document_embeddings = self.semantic_model.encode(self.df['search_content'].tolist())
+
+        tokenized_corpus = [doc.split(" ") for doc in self.df['search_content'].tolist()]
+        self.bm25_model = BM25Okapi(tokenized_corpus)
+        
         self.genai_client = genai.Client(api_key=gemini_api_key)
         self.query_cache = {}
-
-        print("⚡ Memuat Dataset CSV Statis dan Pre-Computing Embeddings (HANYA SEKALI)...")
-        # 1. BACA DATA CSV (STATIS)
-        try:
-            df_csv = pd.read_csv(self.dataset_path)
-            if 'activity_type' in df_csv.columns:
-                df_csv['category'] = df_csv['activity_type']
-            if 'scholarship_path' in df_csv.columns:
-                df_csv['type'] = df_csv['scholarship_path'].apply(
-                    lambda x: 'scholarship' if 'beasiswa' in str(x).lower() else 'competition'
-                )
-            if 'program_name' in df_csv.columns:
-                df_csv['title'] = df_csv['program_name']
-            if 'id' not in df_csv.columns:
-                df_csv['id'] = range(10000, 10000 + len(df_csv))
-            if 'status' not in df_csv.columns:
-                df_csv['status'] = 'active'
-                
-            columns_to_keep = ['id', 'title', 'type', 'level', 'category', 'description', 'status']
-            existing_cols = [col for col in columns_to_keep if col in df_csv.columns]
-            self.static_df = df_csv[existing_cols].fillna('')
-        except Exception as e:
-            print(f"❌ Gagal membaca CSV lokal: {e}")
-            self.static_df = pd.DataFrame(columns=['id', 'title', 'type', 'level', 'category', 'description', 'status'])
-
-        # PRE-COMPUTE STATIC EMBEDDINGS
-        self.static_df['search_content'] = (
-            self.static_df['title'].astype(str) + " " + 
-            self.static_df['description'].astype(str)
-        ).str.lower()
-        
-        self.static_embeddings = self.semantic_model.encode(self.static_df['search_content'].tolist())
-        print(f"✅ Sukses Pre-Compute {len(self.static_df)} program CSV statis ke dalam RAM Global!")
-
-    def _get_live_programs(self, live_programs_payload):
-        if live_programs_payload:
-            return live_programs_payload
-            
-        # Fallback to direct fetch
-        backend_url = "http://localhost:8080/api"
-        programs = []
-        try:
-            res_b = requests.get(f"{backend_url}/beasiswa", timeout=2)
-            if res_b.status_code == 200 and 'application/json' in res_b.headers.get('Content-Type', ''):
-                raw = res_b.json()
-                data_b = raw.get('data', []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
-                for b in data_b:
-                    programs.append({
-                        'id': b.get('id'),
-                        'title': b.get('nama') or b.get('title', ''),
-                        'type': 'scholarship',
-                        'level': 'Nasional',
-                        'category': 'Beasiswa',
-                        'description': b.get('deskripsi', ''),
-                        'status': b.get('status', 'active')
-                    })
-        except: pass
-        try:
-            res_o = requests.get(f"{backend_url}/olimpiade", timeout=2)
-            if res_o.status_code == 200 and 'application/json' in res_b.headers.get('Content-Type', ''):
-                raw = res_o.json()
-                data_o = raw.get('data', []) if isinstance(raw, dict) else raw if isinstance(raw, list) else []
-                for o in data_o:
-                    programs.append({
-                        'id': o.get('id'),
-                        'title': o.get('judul') or o.get('title', ''),
-                        'type': 'competition',
-                        'level': 'Nasional',
-                        'category': o.get('tipe_lomba', 'Akademik'),
-                        'description': o.get('deskripsi', ''),
-                        'status': o.get('status', 'active')
-                    })
-        except: pass
-        return programs
 
     def _dynamic_enrich_query(self, query):
         if query in self.query_cache:
@@ -169,64 +109,17 @@ class ScholarPathMatcher:
         
         return self.query_cache[query]
 
-    def search(self, query, live_programs=None, alpha=0.7, top_k=3, filter_type=None, base_threshold=35.0): 
-        print("\n=== AI MATCHING PROCESS TRIGGERED ===")
+    def search(self, query, alpha=0.7, top_k=3, filter_type=None, base_threshold=35.0): 
         semantic_query, keyword_query = self._dynamic_enrich_query(query)
+
         tokenized_query = keyword_query.split(" ")
-
-        # 1. OPTIMASI IN-MEMORY MERGING & SINGLE-PASS ENCODING
-        t0 = time.time()
-        live_list = self._get_live_programs(live_programs)
+        bm25_scores = self.bm25_model.get_scores(tokenized_query)
         
-        if live_list:
-            df_live = pd.DataFrame(live_list).fillna('')
-            df_live = df_live[df_live['status'].isin(['active', 'approved', 'ACTIVE', 'APPROVED'])]
-            if not df_live.empty:
-                df_live['search_content'] = (
-                    df_live['title'].astype(str) + " " + 
-                    df_live['description'].astype(str)
-                ).str.lower()
-                
-                # Single-pass encode hanya program live baru
-                live_embeddings = self.semantic_model.encode(df_live['search_content'].tolist())
-                
-                # Stack matrix RAM
-                df_combined = pd.concat([self.static_df, df_live], ignore_index=True)
-                combined_embeddings = np.vstack([self.static_embeddings, live_embeddings])
-            else:
-                df_combined = self.static_df.copy()
-                combined_embeddings = self.static_embeddings
-        else:
-            df_combined = self.static_df.copy()
-            combined_embeddings = self.static_embeddings
-            
-        print(f"⚡ In-Memory Merging & Encoding Selesai dalam {time.time() - t0:.3f} detik.")
-
-        # 2. STRICT HARD FILTERING (PANDAS BOOLEAN MASKING) SEBELUM COMPUTATION
-        if filter_type:
-            mask = df_combined['type'].str.lower() == filter_type.lower()
-            df_combined = df_combined[mask]
-            
-            if df_combined.empty:
-                return pd.DataFrame(columns=['title', 'type', 'level', 'match_score_percentage', 'description'])
-                
-            filtered_embeddings = combined_embeddings[mask.values]
-        else:
-            filtered_embeddings = combined_embeddings
-
-        # Rebuild BM25 secara on-the-fly untuk corpus yang telah difilter (sangat cepat)
-        filtered_tokenized = [doc.split(" ") for doc in df_combined['search_content'].tolist()]
-        temp_bm25 = BM25Okapi(filtered_tokenized)
-        bm25_scores = temp_bm25.get_scores(tokenized_query)
-
-        # 3. LIGHTWEIGHT SEMANTIC SIMILARITY COMPUTATION
-        t1 = time.time()
         query_embedding = self.semantic_model.encode([semantic_query])
-        semantic_scores = cosine_similarity(query_embedding, filtered_embeddings)[0]
+        semantic_scores = cosine_similarity(query_embedding, self.document_embeddings)[0]
 
-        # 4. HYBRID SCORING & RETURNING
         semantic_scores_norm = np.clip(semantic_scores, 0, 1)
-        max_bm25 = np.max(bm25_scores) if len(bm25_scores) > 0 else 0
+        max_bm25 = np.max(bm25_scores)
         if max_bm25 > 0:
             bm25_scores_norm = bm25_scores / max(max_bm25, 10.0) 
         else:
@@ -234,16 +127,20 @@ class ScholarPathMatcher:
 
         hybrid_scores = (alpha * semantic_scores_norm) + ((1 - alpha) * bm25_scores_norm)
 
-        df_combined['match_score_raw'] = hybrid_scores
-        df_combined['match_score_percentage'] = (hybrid_scores * 100).round(2) 
+        results_df = self.df.copy()
+        results_df['match_score_raw'] = hybrid_scores
+        results_df['match_score_percentage'] = (hybrid_scores * 100).round(2) 
         
-        df_combined = df_combined[df_combined['match_score_percentage'] >= base_threshold]
+        results_df = results_df[results_df['match_score_percentage'] >= base_threshold]
+        
+        if filter_type:
+            results_df = results_df[results_df['type'].str.lower() == filter_type.lower()]
             
-        top_results = df_combined.sort_values(by='match_score_percentage', ascending=False)
+        top_results = results_df.sort_values(by='match_score_percentage', ascending=False)
+        
         if top_k is not None:
             top_results = top_results.head(top_k)
-            
-        print(f"🚀 Perhitungan Similarity Cepat Selesai dalam {time.time() - t1:.3f} detik.")
+        
         return top_results[['title', 'type', 'level', 'match_score_percentage', 'description']]
 
 # --- Cara Penggunaan & Pengujian ---

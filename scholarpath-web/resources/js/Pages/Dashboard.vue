@@ -211,6 +211,45 @@ const handleAddToWishlist = async (program) => {
     }
 };
 
+const handleRegisterAI = (rec) => {
+    // Cari program di database
+    const fullProgram = latestPrograms.value.find(p => 
+        p.title && p.title.toLowerCase().trim() === rec.title.toLowerCase().trim()
+    );
+    
+    // FIX: SELALU gunakan informasi dari AI (judul & deskripsi AI)
+    // bukan menimpa dengan data dari Latest Program.
+    
+    let validId = 1;
+    let validCategory = 'Rekomendasi AI';
+    let validType = rec.type === 'scholarship' || rec.type === 'Beasiswa' ? 'Beasiswa' : 'Lomba';
+
+    if (fullProgram) {
+        validId = fullProgram.id;
+        validType = fullProgram.type;
+        validCategory = fullProgram.category;
+    } else {
+        // Jika dari CSV mock data, pinjam ID program asli pertama agar bisa masuk ke instansi
+        const fallbackProgram = latestPrograms.value[0];
+        if (fallbackProgram) {
+            validId = fallbackProgram.id;
+            validType = fallbackProgram.type;
+            validCategory = fallbackProgram.category;
+        }
+    }
+
+    selectedLatestProgram.value = {
+        id: validId,
+        title: rec.title,             // WAJIB: Judul dari AI
+        description: rec.description, // WAJIB: Deskripsi dari AI
+        type: validType,
+        category: validCategory,
+        detailLabel: 'Hasil Rekomendasi AI',
+        image: '/images/hero_student.png',
+        is_ai_recommendation: true    // Flag khusus untuk RegistrationModal
+    };
+};
+
 
 
 // ==========================================
@@ -344,7 +383,16 @@ const fetchInstansiDashboard = async () => {
         const resApp = await axios.get(`${backendUrl}/instansi/pendaftaran`, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        const applicants = resApp.data.data || [];
+        const applicants = (resApp.data.data || []).map(a => {
+            if (a.alasan && a.alasan.startsWith('[AI-PROGRAM: ')) {
+                const match = a.alasan.match(/^\[AI-PROGRAM:\s*(.*?)\]\s*(.*)/);
+                if (match) {
+                    a.program_title = match[1];
+                    a.alasan = match[2];
+                }
+            }
+            return a;
+        });
 
         const [resB, resO] = await Promise.all([
             axios.get(`${backendUrl}/beasiswa`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -964,6 +1012,14 @@ onMounted(async () => {
                                 <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400 font-semibold line-clamp-3">
                                     {{ rec.description }}
                                 </p>
+                            </div>
+                            <div class="pt-5 px-1 flex items-center justify-between border-t border-slate-50 dark:border-slate-800 mt-4">
+                                <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Rekomendasi Cerdas</span>
+                                <div class="flex gap-2">
+                                    <button type="button" @click="handleRegisterAI(rec)" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer">
+                                        Daftar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </template>
