@@ -11,8 +11,8 @@ const mfaEnabled = ref(true);
 const sessionExpiration = ref('30 Menit');
 
 // Active tab (removed AI Configuration)
-const activeTab = ref('General Settings');
-const availableTabs = ['General Settings', 'Security', 'Notifications'];
+const activeTab = ref('Pengaturan Umum');
+const availableTabs = ['Pengaturan Umum', 'Keamanan', 'Notifikasi'];
 
 const messageToast = ref({ text: '', type: '' });
 const isSaving = ref(false);
@@ -80,7 +80,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head title="Settings" />
+    <Head title="Pengaturan" />
 
     <AdminLayout>
         <!-- Toast -->
@@ -96,7 +96,7 @@ onUnmounted(() => {
             <!-- Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
-                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Settings</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Pengaturan</h1>
                     <p class="text-sm font-medium text-slate-500">Konfigurasi parameter platform, keamanan akses, dan template komunikasi ScholarPath.</p>
                 </div>
                 <div class="flex items-center gap-2 self-start sm:self-auto bg-slate-100 border border-slate-200/50 rounded-xl px-3.5 py-1.5 text-xs font-black text-slate-650">
@@ -129,18 +129,18 @@ onUnmounted(() => {
                     <!-- General Settings Card -->
                     <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-6">
                         <div class="flex justify-between items-center pb-3 border-b border-slate-50">
-                            <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider">General Settings</h3>
-                            <span class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded bg-purple-50 text-purple-700 border border-purple-100">Active Configuration</span>
+                            <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider">Pengaturan Umum</h3>
+                            <span class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded bg-purple-50 text-purple-700 border border-purple-100">Konfigurasi Aktif</span>
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Platform Name</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Nama Platform</label>
                                 <input type="text" v-model="platformName" placeholder="Nama platform..."
                                     class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-purple-500 rounded-xl text-xs text-slate-800 font-bold transition outline-none"/>
                             </div>
                             <div>
-                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Support Email</label>
+                                <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Email Bantuan</label>
                                 <input type="email" v-model="supportEmail" placeholder="Email bantuan sistem..."
                                     class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 focus:bg-white focus:border-purple-500 rounded-xl text-xs text-slate-800 font-bold transition outline-none"/>
                             </div>
@@ -148,11 +148,11 @@ onUnmounted(() => {
 
                         <!-- WIB Timezone (locked) -->
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">System Timezone</label>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Zona Waktu Sistem</label>
                             <div class="flex items-center gap-3">
                                 <div class="flex-1 px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs text-indigo-800 font-bold flex items-center justify-between">
                                     <span>🕐 WIB (GMT +7:00) Jakarta — Terkunci</span>
-                                    <span class="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Locked</span>
+                                    <span class="text-[9px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Terkunci</span>
                                 </div>
                             </div>
                             <!-- Real-time WIB digital clock -->
@@ -172,11 +172,11 @@ onUnmounted(() => {
 
                     <!-- Security & Access Card -->
                     <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-6">
-                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider pb-3 border-b border-slate-50">Security &amp; Access</h3>
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider pb-3 border-b border-slate-50">Keamanan &amp; Akses</h3>
 
                         <div class="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl">
                             <div class="space-y-0.5">
-                                <h4 class="text-xs font-black text-slate-800">Multi-Factor Authentication (MFA)</h4>
+                                <h4 class="text-xs font-black text-slate-800">Otentikasi Multi-Faktor (MFA)</h4>
                                 <p class="text-[11px] font-semibold text-slate-400">Paksa semua admin menggunakan 2FA keamanan.</p>
                             </div>
                             <button type="button" @click="mfaEnabled = !mfaEnabled"
@@ -189,7 +189,7 @@ onUnmounted(() => {
 
                         <div class="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl">
                             <div class="space-y-0.5">
-                                <h4 class="text-xs font-black text-slate-800">Session Expiration</h4>
+                                <h4 class="text-xs font-black text-slate-800">Masa Kadaluarsa Sesi</h4>
                                 <p class="text-[11px] font-semibold text-slate-400">Auto logout setelah periode tidak aktif.</p>
                             </div>
                             <input type="text" v-model="sessionExpiration"
@@ -199,14 +199,14 @@ onUnmounted(() => {
 
                     <!-- Communication Templates Card -->
                     <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-6">
-                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider pb-3 border-b border-slate-50">Communication Templates</h3>
+                        <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider pb-3 border-b border-slate-50">Template Komunikasi</h3>
                         <div class="space-y-3">
                             <!-- Template 1 -->
                             <div class="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl">
                                 <div class="flex items-center gap-3.5 text-left">
                                     <div class="h-8 w-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs shrink-0">✓</div>
                                     <div class="space-y-0.5">
-                                        <h4 class="text-xs font-black text-slate-800">Scholarship Approval Email</h4>
+                                        <h4 class="text-xs font-black text-slate-800">Email Persetujuan Beasiswa</h4>
                                         <p class="text-[11px] font-semibold text-slate-400">Dikirim saat aplikasi beasiswa siswa berhasil.</p>
                                         <div class="flex gap-2.5 pt-1.5 text-[8.5px] font-black uppercase text-slate-450 tracking-wider">
                                             <span class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">Email</span>
@@ -214,14 +214,14 @@ onUnmounted(() => {
                                         </div>
                                     </div>
                                 </div>
-                                <button type="button" @click="showToast('Template editor coming soon!', 'success')" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl transition cursor-pointer text-slate-450 hover:text-slate-700">📝</button>
+                                <button type="button" @click="showToast('Editor template segera hadir!', 'success')" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl transition cursor-pointer text-slate-450 hover:text-slate-700">📝</button>
                             </div>
                             <!-- Template 2 -->
                             <div class="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl">
                                 <div class="flex items-center gap-3.5 text-left">
                                     <div class="h-8 w-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold text-xs shrink-0">⚠</div>
                                     <div class="space-y-0.5">
-                                        <h4 class="text-xs font-black text-slate-800">Security Alert Notification</h4>
+                                        <h4 class="text-xs font-black text-slate-800">Notifikasi Peringatan Keamanan</h4>
                                         <p class="text-[11px] font-semibold text-slate-400">Dikirim saat terdeteksi percobaan login mencurigakan.</p>
                                         <div class="flex gap-2.5 pt-1.5 text-[8.5px] font-black uppercase text-slate-450 tracking-wider">
                                             <span class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">Email</span>
@@ -229,21 +229,21 @@ onUnmounted(() => {
                                         </div>
                                     </div>
                                 </div>
-                                <button type="button" @click="showToast('Template editor coming soon!', 'success')" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl transition cursor-pointer text-slate-450 hover:text-slate-700">📝</button>
+                                <button type="button" @click="showToast('Editor template segera hadir!', 'success')" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl transition cursor-pointer text-slate-450 hover:text-slate-700">📝</button>
                             </div>
                             <!-- Template 3 -->
                             <div class="flex items-center justify-between p-4 bg-slate-50/50 border border-slate-100 rounded-2xl">
                                 <div class="flex items-center gap-3.5 text-left">
                                     <div class="h-8 w-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-xs shrink-0">🏛</div>
                                     <div class="space-y-0.5">
-                                        <h4 class="text-xs font-black text-slate-800">Institution Verification Result</h4>
+                                        <h4 class="text-xs font-black text-slate-800">Hasil Verifikasi Instansi</h4>
                                         <p class="text-[11px] font-semibold text-slate-400">Dikirim saat instansi disetujui atau ditolak admin.</p>
                                         <div class="flex gap-2.5 pt-1.5 text-[8.5px] font-black uppercase text-slate-450 tracking-wider">
                                             <span class="bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">Email</span>
                                         </div>
                                     </div>
                                 </div>
-                                <button type="button" @click="showToast('Template editor coming soon!', 'success')" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl transition cursor-pointer text-slate-450 hover:text-slate-700">📝</button>
+                                <button type="button" @click="showToast('Editor template segera hadir!', 'success')" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl transition cursor-pointer text-slate-450 hover:text-slate-700">📝</button>
                             </div>
                         </div>
                     </div>
@@ -251,12 +251,12 @@ onUnmounted(() => {
                     <!-- Save Buttons -->
                     <div class="flex justify-end items-center gap-4 pt-4 border-t border-slate-200/60">
                         <button type="button" @click="discardChanges" class="px-5 py-3 text-slate-500 hover:text-slate-800 text-xs font-bold transition cursor-pointer">
-                            Discard Changes
+                            Batalkan Perubahan
                         </button>
                         <button type="button" @click="saveSettings" :disabled="isSaving"
                             class="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow-lg shadow-purple-600/10 hover:shadow-xl transition cursor-pointer flex items-center justify-center gap-2">
                             <svg v-if="isSaving" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                            <span>Save Configuration</span>
+                            <span>Simpan Konfigurasi</span>
                         </button>
                     </div>
                 </div>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { Link, useForm, router, usePage } from '@inertiajs/vue3';
 import axios from 'axios';
 
@@ -211,7 +211,11 @@ const fetchNotificationsData = async () => {
         });
         
         // Upcoming Deadline reminder if they have active programs
-        if (registrations.length > 0) {
+        const hasActiveOrPending = registrations.some(r => {
+            const status = r.status_name?.toLowerCase();
+            return status === 'pending' || status === 'active' || status === 'daftar' || status === 'applied';
+        });
+        if (hasActiveOrPending) {
             compiled.push({
                 id: 'deadline_rem',
                 title: 'Tenggat Waktu Pendaftaran',
@@ -257,33 +261,38 @@ const getNotificationStyles = (item) => {
     
     if (text.includes('diterima') || text.includes('accept') || text.includes('berhasil') || text.includes('disetujui')) {
         return {
-            container: 'bg-emerald-50/80 dark:bg-emerald-900/20 border-l-4 border-emerald-500',
-            title: 'text-emerald-800 dark:text-emerald-400',
-            message: 'text-emerald-600 dark:text-emerald-300'
+            container: 'bg-emerald-500 border-l-4 border-emerald-700',
+            title: 'text-white',
+            message: 'text-emerald-100'
         };
     }
     
     if (text.includes('ditolak') || text.includes('reject') || text.includes('gagal') || text.includes('tidak memenuhi')) {
         return {
-            container: 'bg-red-50/80 dark:bg-red-900/20 border-l-4 border-red-500',
-            title: 'text-red-800 dark:text-red-400',
-            message: 'text-red-600 dark:text-red-300'
+            container: 'bg-red-500 border-l-4 border-red-700',
+            title: 'text-white',
+            message: 'text-red-100'
         };
     }
     
     if (text.includes('menunggu') || text.includes('pending') || text.includes('terkirim') || text.includes('review')) {
         return {
-            container: 'bg-amber-50/80 dark:bg-amber-900/20 border-l-4 border-amber-500',
-            title: 'text-amber-800 dark:text-amber-400',
-            message: 'text-amber-700 dark:text-amber-300'
+            container: 'bg-amber-400 border-l-4 border-amber-600',
+            title: 'text-slate-900',
+            message: 'text-amber-900'
         };
     }
     
     return {
-        container: 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50 border-l-4 border-transparent',
-        title: 'text-slate-800 dark:text-slate-200',
-        message: 'text-slate-600 dark:text-slate-400'
+        container: 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 border-l-4 border-transparent',
+        title: 'text-slate-800 dark:text-slate-100',
+        message: 'text-slate-600 dark:text-slate-300'
     };
+};
+
+let pollingIntervalId = null;
+const handleProfilePhotoUpdate = (e) => {
+    userProfile.value.foto = e.detail;
 };
 
 onMounted(() => {
@@ -306,14 +315,12 @@ onMounted(() => {
     }
 
     // Listen to profile photo updates
-    window.addEventListener('profile-photo-updated', (e) => {
-        userProfile.value.foto = e.detail;
-    });
+    window.addEventListener('profile-photo-updated', handleProfilePhotoUpdate);
 
     // Fetch live notifications
     fetchNotificationsData();
     // Poll notifications every 60 seconds
-    const intervalId = setInterval(fetchNotificationsData, 60000);
+    pollingIntervalId = setInterval(fetchNotificationsData, 60000);
 
     // Fetch live profile details if token exists
     const token = localStorage.getItem('auth_token');
@@ -342,6 +349,11 @@ onMounted(() => {
         });
     }
 });
+
+onUnmounted(() => {
+    if (pollingIntervalId) clearInterval(pollingIntervalId);
+    window.removeEventListener('profile-photo-updated', handleProfilePhotoUpdate);
+});
 </script>
 
 <template>
@@ -357,7 +369,7 @@ onMounted(() => {
                     </span>
                 </Link>
                 <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                    {{ userProfile.role?.toLowerCase() === 'instansi' ? 'Institution Dashboard' : 'Student Dashboard' }}
+                    {{ userProfile.role?.toLowerCase() === 'instansi' ? 'Dashboard Instansi' : 'Dashboard Siswa' }}
                 </span>
             </div>
 
@@ -375,7 +387,7 @@ onMounted(() => {
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" />
                         </svg>
-                        Admin Dashboard
+                        Dashboard Admin
                     </Link>
 
                     <!-- User Management -->
@@ -389,7 +401,7 @@ onMounted(() => {
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
-                        User Management
+                        Manajemen Pengguna
                     </Link>
 
                     <!-- Content Verification -->
@@ -403,7 +415,7 @@ onMounted(() => {
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Content Verification
+                        Verifikasi Konten
                     </Link>
 
                     <!-- Institution Verification -->
@@ -417,7 +429,7 @@ onMounted(() => {
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
-                        Institution Verification
+                        Verifikasi Institusi
                     </Link>
 
                     <!-- System Logs -->
@@ -431,7 +443,7 @@ onMounted(() => {
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                         </svg>
-                        System Logs
+                        Log Sistem
                     </Link>
                 </template>
 
@@ -490,6 +502,24 @@ onMounted(() => {
                         </span>
                     </Link>
 
+                    <!-- Profil Instansi -->
+                    <Link
+                        :href="isApproved ? route('profil-instansi') : '#'"
+                        class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
+                        :class="[
+                            route().current('profil-instansi') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                            { 'pointer-events-none opacity-40 cursor-not-allowed': isLocked }
+                        ]"
+                    >
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        Profil Instansi
+                        <span v-if="isLocked" class="ml-auto">
+                            <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        </span>
+                    </Link>
+
                 </template>
 
                 <template v-else>
@@ -518,7 +548,7 @@ onMounted(() => {
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                         </svg>
-                        My Programs
+                        Program Saya
                     </Link>
 
                     <!-- AI Guide -->
@@ -532,7 +562,7 @@ onMounted(() => {
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        AI Guide
+                        Panduan AI
                     </Link>
                 </template>
 
@@ -548,7 +578,7 @@ onMounted(() => {
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    Settings
+                    Pengaturan
                 </Link>
             </nav>
 
@@ -562,7 +592,7 @@ onMounted(() => {
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
-                    Log Out
+                    Keluar
                 </button>
             </div>
         </aside>
@@ -584,7 +614,7 @@ onMounted(() => {
                             v-model="searchQuery"
                             @keydown.enter="handleSearch"
                             type="text"
-                            placeholder="Search scholarships, labs, competitions..."
+                            placeholder="Cari beasiswa, olimpiade, tempat magang..."
                             class="w-full pl-11 pr-12 py-2.5 bg-slate-50 border border-slate-100 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500 rounded-2xl text-sm text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-indigo-500/5 transition outline-none"
                         />
                         <button
@@ -624,20 +654,20 @@ onMounted(() => {
                         <!-- Notification Dropdown Panel -->
                         <div
                             v-if="showNotifications"
-                            class="absolute right-0 mt-2 w-80 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden z-50 text-left"
+                            class="absolute right-0 mt-2 w-80 max-w-[calc(100vw-1.5rem)] bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border border-slate-100 dark:border-slate-700/60 rounded-2xl shadow-xl overflow-hidden z-50 text-left"
                         >
-                            <div class="px-4 py-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
-                                <span class="text-xs font-bold text-slate-700">Notifications</span>
+                            <div class="px-4 py-3 bg-slate-50/80 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-200">Notifikasi</span>
                                 <button
                                     @click="showNotifications = false"
-                                    class="text-[10px] text-slate-400 hover:text-slate-600 font-semibold"
+                                    class="text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-semibold"
                                 >
-                                    Dismiss
+                                    Tutup
                                 </button>
                             </div>
-                            <div class="max-h-72 overflow-y-auto divide-y divide-slate-50">
-                                <div v-if="notificationsList.length === 0" class="px-4 py-6 text-center text-xs text-slate-400">
-                                    No notifications found.
+                            <div class="max-h-72 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700/50">
+                                <div v-if="notificationsList.length === 0" class="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+                                    Tidak ada notifikasi.
                                 </div>
                                 <div
                                     v-for="item in notificationsList"
@@ -647,7 +677,10 @@ onMounted(() => {
                                 >
                                     <div class="flex items-start justify-between gap-1">
                                         <h5 class="text-xs font-bold" :class="getNotificationStyles(item).title">{{ item.title }}</h5>
-                                        <span class="text-[9px] text-slate-400 font-medium shrink-0">
+                                        <span
+                                            class="text-[10px] font-medium shrink-0"
+                                            :class="['bg-emerald-500','bg-red-500','bg-amber-400'].some(c => getNotificationStyles(item).container.includes(c)) ? 'text-white/70' : 'text-slate-400 dark:text-slate-500'"
+                                        >
                                             {{ new Date(item.date).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) }}
                                         </span>
                                     </div>
@@ -667,7 +700,7 @@ onMounted(() => {
                                 {{ userProfile.name || $page.props.auth.user.name }}
                             </h4>
                             <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
-                                {{ userProfile.role }}
+                                {{ userProfile.role === 'Student' || userProfile.role === 'student' ? 'Siswa' : (userProfile.role?.toLowerCase() === 'instansi' ? 'Instansi' : userProfile.role) }}
                             </p>
                         </div>
                         <!-- Profile Image -->
@@ -716,7 +749,7 @@ onMounted(() => {
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                             :class="route().current('admin.dashboard') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                         >
-                            Admin Dashboard
+                            Dashboard Admin
                         </Link>
                         <!-- User Management -->
                         <Link
@@ -724,7 +757,7 @@ onMounted(() => {
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                             :class="route().current('admin.user-management') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                         >
-                            User Management
+                            Manajemen Pengguna
                         </Link>
                         <!-- Content Verification -->
                         <Link
@@ -732,7 +765,7 @@ onMounted(() => {
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                             :class="route().current('admin.content-verification') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                         >
-                            Content Verification
+                            Verifikasi Konten
                         </Link>
                         <!-- Institution Verification -->
                         <Link
@@ -740,7 +773,7 @@ onMounted(() => {
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                             :class="route().current('admin.institution-verification') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                         >
-                            Institution Verification
+                            Verifikasi Institusi
                         </Link>
                         <!-- System Logs -->
                         <Link
@@ -748,7 +781,7 @@ onMounted(() => {
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                             :class="route().current('admin.system-logs') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                         >
-                            System Logs
+                            Log Sistem
                         </Link>
                     </template>
                     <template v-else-if="isInstansi">
@@ -801,7 +834,7 @@ onMounted(() => {
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                             :class="route().current('my-programs') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                         >
-                            My Programs
+                            Program Saya
                         </Link>
                         <!-- AI Guide -->
                         <Link
@@ -809,7 +842,7 @@ onMounted(() => {
                             class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                             :class="route().current('ai-guide') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                         >
-                            AI Guide
+                            Panduan AI
                         </Link>
                     </template>
 
@@ -819,7 +852,7 @@ onMounted(() => {
                         class="flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-200"
                         :class="route().current('profile.edit') || route().current('admin.settings') ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' : 'text-slate-600 hover:bg-slate-50'"
                     >
-                        Settings
+                        Pengaturan
                     </Link>
                 </nav>
 
@@ -829,7 +862,7 @@ onMounted(() => {
                         @click="handleLogout"
                         class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl text-sm font-bold transition duration-200 cursor-pointer"
                     >
-                        Log Out
+                        Keluar
                     </button>
                 </div>
             </aside>

@@ -498,16 +498,16 @@ onMounted(() => {
     <AuthenticatedLayout>
         <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-xs font-bold transition-all duration-300 animate-slideDown"
+            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-xs font-bold transition-all duration-300 animate-slideDown text-white"
                 :class="{
-                    'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60': messageToast.type === 'success',
-                    'bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-400 border-amber-100 dark:border-amber-800/60': messageToast.type === 'warning',
-                    'bg-red-50 dark:bg-red-900/40 text-red-800 dark:text-red-400 border-red-100 dark:border-red-800/60': messageToast.type === 'error'
+                    'bg-emerald-500': messageToast.type === 'success',
+                    'bg-amber-400 !text-slate-900': messageToast.type === 'warning',
+                    'bg-red-500': messageToast.type === 'error'
                 }"
             >
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 dark:bg-emerald-600 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
-                <span v-else-if="messageToast.type === 'warning'" class="h-5 w-5 bg-amber-500 dark:bg-amber-600 text-white rounded-full flex items-center justify-center text-[10px]">!</span>
-                <span v-else class="h-5 w-5 bg-red-500 dark:bg-red-600 text-white rounded-full flex items-center justify-center text-[10px]">×</span>
+                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
+                <span v-else-if="messageToast.type === 'warning'" class="h-5 w-5 bg-black/20 text-slate-900 rounded-full flex items-center justify-center text-[10px]">!</span>
+                <span v-else class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-[10px]">×</span>
                 {{ messageToast.text }}
             </div>
         </transition>
@@ -1114,24 +1114,26 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Actions Buttons Footer -->
-                    <div class="flex justify-end gap-3.5 pt-4">
-                        <button
-                            type="button"
-                            @click="handleDiscardChanges"
-                            class="px-6 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-2xl transition duration-200 cursor-pointer"
-                        >
-                            Discard Changes
-                        </button>
-                        
-                        <button
-                            type="button"
-                            :disabled="isLoading"
-                            @click="handleSaveStudentProfile"
-                            class="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow-lg shadow-indigo-600/15 hover:shadow-xl hover:shadow-indigo-600/25 transition duration-200 cursor-pointer"
-                        >
-                            Save Profile
-                        </button>
+                    <!-- Footer Action Bar: Cancel & Save -->
+                    <div v-if="userRole === 'siswa' || userRole === 'student'" class="flex items-center justify-end border-t border-slate-200/60 dark:border-slate-800 pt-6">
+                        <div class="flex items-center gap-3">
+                            <button
+                                type="button"
+                                @click="handleDiscardChanges"
+                                class="px-6 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-2xl transition duration-200 cursor-pointer"
+                            >
+                                Batalkan Perubahan
+                            </button>
+                            
+                            <button
+                                type="button"
+                                :disabled="isLoading"
+                                @click="handleSaveStudentProfile"
+                                class="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow-lg shadow-indigo-600/15 hover:shadow-xl hover:shadow-indigo-600/25 transition duration-200 cursor-pointer"
+                            >
+                                Simpan Profil
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

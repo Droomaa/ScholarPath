@@ -4,148 +4,158 @@ import { Head } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
-// --- MOCK DATA: sorted by oldest pending first ---
-const today = new Date();
-const daysAgo = (n) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - n);
-    return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
-};
-
 const rawQueue = ref([]);
-
+const isLoading = ref(true);
+const searchQuery = ref('');
+const activeTypeFilter = ref('All');
+const isActioning = ref(false);
+const selectedProgram = ref(null);
+const activeItem = ref(null);
+const messageToast = ref({ text: '', type: '' });
 const approvedToday = ref(0);
 const declinedToday = ref(0);
-const revisionRate = ref('0%');
 
-const activeItem = ref(null);
-const selectedProgram = ref(null);
-const messageToast = ref({ text: '', type: '' });
-const isActioning = ref(false);
-
-// Revision Modal
+// Modals
 const showRevisionModal = ref(false);
 const revisionFeedback = ref('');
-
-// Reject Modal
 const showRejectModal = ref(false);
 const rejectTitle = ref('');
 const rejectDesc = ref('');
+
+const getAuthToken = () => localStorage.getItem('auth_token');
+const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
 
 const showToast = (text, type = 'success') => {
     messageToast.value = { text, type };
     setTimeout(() => { messageToast.value = { text: '', type: '' }; }, 4500);
 };
 
-const getAuthToken = () => localStorage.getItem('auth_token');
+// ─── COMPUTED ───────────────────────────────────────────────────────────────
 
-// Sorted by oldest first
-const sortedQueue = computed(() =>
-    [...rawQueue.value].sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at))
+// The backend also returns "Partner Account" items — filter those out here.
+// Only keep content that needs content verification: Scholarship & Competition.
+const contentQueue = computed(() =>
+    rawQueue.value.filter(q =>
+        (q.type === 'Scholarship Content' || q.type === 'Competition Content') &&
+        (q.status === 'PENDING' || q.status === 'pending' || q.status === 'WAITING_APPROVAL' || q.status === 'pending-resubmit')
+    )
 );
 
-const pendingCount = computed(() => rawQueue.value.filter(q => q.status === 'pending' || q.status === 'pending-resubmit').length);
+const pendingCount = computed(() => contentQueue.value.length);
 
-const selectItem = async (item) => { 
-    activeItem.value = item; 
-    selectedProgram.value = null; // Loading state
-    try {
-        const token = getAuthToken();
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        let detailData = {};
-        
-        if (item.type === 'Scholarship Content') {
-            const res = await axios.get(`${backendUrl}/beasiswa/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
-            detailData = res.data?.data || {};
-        } else if (item.type === 'Competition Content') {
-            const res = await axios.get(`${backendUrl}/olimpiade/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
-            detailData = res.data?.data || {};
-        }
-        
-        selectedProgram.value = { ...item, ...detailData };
-    } catch (e) {
-        selectedProgram.value = { ...item };
-        console.error("Gagal menarik detail program", e);
+const scholarshipCount = computed(() => contentQueue.value.filter(q => q.type === 'Scholarship Content').length);
+const competitionCount = computed(() => contentQueue.value.filter(q => q.type === 'Competition Content').length);
+
+const filteredQueue = computed(() => {
+    let list = contentQueue.value;
+    if (activeTypeFilter.value !== 'All') {
+        list = list.filter(q => q.type === activeTypeFilter.value);
     }
-};
+    if (searchQuery.value.trim()) {
+        const q = searchQuery.value.toLowerCase();
+        list = list.filter(item =>
+            item.name.toLowerCase().includes(q) ||
+            (item.submission_date && item.submission_date.toLowerCase().includes(q))
+        );
+    }
+    return [...list].sort((a, b) => new Date(a.submission_date) - new Date(b.submission_date));
+});
 
-// Load from backend
+// ─── DATA LOADING ────────────────────────────────────────────────────────────
+
 onMounted(async () => {
+    isLoading.value = true;
     const token = getAuthToken();
-    if (!token) return;
+    if (!token) { isLoading.value = false; return; }
     try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        const res = await axios.get(`${backendUrl}/admin/verification-queue`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await axios.get(`${backendUrl}/admin/verification-queue`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
         if (res.data?.data) {
             rawQueue.value = res.data.data;
         }
     } catch (e) {
-        console.error("Gagal menarik data antrean verifikasi", e);
-    }
-    if (sortedQueue.value.length > 0) {
-        selectItem(sortedQueue.value[0]);
+        console.error('Gagal memuat antrean verifikasi konten', e);
+        showToast('Gagal memuat data dari server.', 'error');
+    } finally {
+        isLoading.value = false;
     }
 });
 
-// --- APPROVE ---
+// ─── DETAIL VIEW ─────────────────────────────────────────────────────────────
+
+const openDetail = async (item) => {
+    if (activeItem.value?.id === item.id && activeItem.value?.type === item.type) return;
+    activeItem.value = item;
+    selectedProgram.value = null;
+    try {
+        const token = getAuthToken();
+        let detailData = {};
+        if (item.type === 'Scholarship Content') {
+            const res = await axios.get(`${backendUrl}/beasiswa/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
+            detailData = res.data?.data || {};
+        } else {
+            const res = await axios.get(`${backendUrl}/olimpiade/${item.id}`, { headers: { Authorization: `Bearer ${token}` } });
+            detailData = res.data?.data || {};
+        }
+        selectedProgram.value = { ...item, ...detailData };
+    } catch (e) {
+        selectedProgram.value = { ...item };
+    }
+};
+
+const closeDetail = () => {
+    activeItem.value = null;
+    selectedProgram.value = null;
+};
+
+// ─── APPROVE ─────────────────────────────────────────────────────────────────
+
 const handleApprove = async () => {
-    if (!activeItem.value) return;
+    if (!activeItem.value || isActioning.value) return;
     isActioning.value = true;
     const token = getAuthToken();
-
+    const url = activeItem.value.type === 'Scholarship Content'
+        ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
+        : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
     try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        const url = activeItem.value.type === 'Scholarship Content'
-            ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
-            : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
         await axios.put(url, { status: 'active', is_visible: true }, { headers: { Authorization: `Bearer ${token}` } });
-    } catch (e) { /* local fallback */ }
-
-    // Remove from local queue
-    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id);
+    } catch (e) {
+        console.error('Gagal approve program', e);
+    }
+    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id && q.type === activeItem.value.type);
     if (idx !== -1) rawQueue.value.splice(idx, 1);
     approvedToday.value++;
-    showToast(`Program "${activeItem.value.name}" berhasil disetujui dan dipublikasikan!`, 'success');
-    activeItem.value = null;
-    selectedProgram.value = null;
-    if (sortedQueue.value.length > 0) selectItem(sortedQueue.value[0]);
+    showToast(`Program "${activeItem.value.name}" berhasil disetujui dan dipublikasikan! ✓`, 'success');
+    closeDetail();
     isActioning.value = false;
 };
 
-// --- REQUEST REVISION ---
+// ─── REQUEST REVISION ────────────────────────────────────────────────────────
+
 const handleRequestRevision = async () => {
-    if (!revisionFeedback.value.trim() || !activeItem.value) return;
+    if (!revisionFeedback.value.trim() || !activeItem.value || isActioning.value) return;
     isActioning.value = true;
     const token = getAuthToken();
-
+    const url = activeItem.value.type === 'Scholarship Content'
+        ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
+        : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
     try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        const url = activeItem.value.type === 'Scholarship Content'
-            ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
-            : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
-        await axios.put(url, { 
-            status: 'pending-resubmit', 
-            is_visible: false,
-            alasan: revisionFeedback.value 
-        }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(url, { status: 'pending-resubmit', is_visible: false, alasan: revisionFeedback.value }, { headers: { Authorization: `Bearer ${token}` } });
     } catch (e) {
-        console.error("Gagal mengirim request revisi", e);
+        console.error('Gagal request revisi', e);
     }
-
-    // Mark as pending-resubmit (simulate re-submit behavior)
-    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id);
+    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id && q.type === activeItem.value.type);
     if (idx !== -1) rawQueue.value[idx].status = 'pending-resubmit';
-
-    showToast(`Permintaan revisi dikirim. Program masuk status Pending Re-submit.`, 'success');
+    showToast('Permintaan revisi berhasil dikirim ke instansi.', 'success');
     showRevisionModal.value = false;
     revisionFeedback.value = '';
-    activeItem.value = null;
-    selectedProgram.value = null;
-    if (sortedQueue.value.length > 0) selectItem(sortedQueue.value[0]);
+    closeDetail();
     isActioning.value = false;
 };
 
-// --- REJECT (remove from list) ---
+// ─── REJECT ──────────────────────────────────────────────────────────────────
+
 const openRejectModal = () => {
     rejectTitle.value = '';
     rejectDesc.value = '';
@@ -153,271 +163,338 @@ const openRejectModal = () => {
 };
 
 const handleReject = async () => {
-    if (!rejectTitle.value.trim() || !rejectDesc.value.trim() || !activeItem.value) return;
+    if (!rejectTitle.value.trim() || !rejectDesc.value.trim() || !activeItem.value || isActioning.value) return;
     isActioning.value = true;
     const token = getAuthToken();
-
+    const url = activeItem.value.type === 'Scholarship Content'
+        ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
+        : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
     try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        const url = activeItem.value.type === 'Scholarship Content'
-            ? `${backendUrl}/admin/verify/beasiswa/${activeItem.value.id}`
-            : `${backendUrl}/admin/verify/olimpiade/${activeItem.value.id}`;
-        await axios.put(url, { 
-            status: 'rejected', 
-            is_visible: false,
-            alasan: `${rejectTitle.value}: ${rejectDesc.value}` 
-        }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.put(url, { status: 'rejected', is_visible: false, alasan: `${rejectTitle.value}: ${rejectDesc.value}` }, { headers: { Authorization: `Bearer ${token}` } });
     } catch (e) {
-        console.error("Gagal menolak program", e);
+        console.error('Gagal reject program', e);
     }
-
-    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id);
+    const idx = rawQueue.value.findIndex(q => q.id === activeItem.value.id && q.type === activeItem.value.type);
     if (idx !== -1) rawQueue.value.splice(idx, 1);
     declinedToday.value++;
-    showToast(`Program "${activeItem.value.name}" telah ditolak dan dihapus dari antrean.`, 'success');
+    showToast(`Program "${activeItem.value.name}" telah ditolak.`, 'success');
     showRejectModal.value = false;
-    activeItem.value = null;
-    selectedProgram.value = null;
-    if (sortedQueue.value.length > 0) selectItem(sortedQueue.value[0]);
+    closeDetail();
     isActioning.value = false;
 };
 </script>
 
 <template>
-    <Head title="Content Verification" />
+    <Head title="Verifikasi Konten" />
 
     <AdminLayout>
-        <!-- Toast -->
+        <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold"
+            <div v-if="messageToast.text"
+                class="fixed top-6 right-6 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold"
                 :class="{ 'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success', 'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error' }">
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+                <span class="h-5 w-5 rounded-full flex items-center justify-center text-xs text-white"
+                    :class="messageToast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'">
+                    {{ messageToast.type === 'success' ? '✓' : '✗' }}
+                </span>
                 {{ messageToast.text }}
             </div>
         </transition>
 
-        <div class="space-y-8 text-left">
-            <!-- Header -->
+        <div class="space-y-6 text-left">
+
+            <!-- Page Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
-                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Content Verification Queue</h1>
-                    <p class="text-sm font-medium text-slate-500">Tinjau dan kelola program beasiswa & kompetisi yang diajukan instansi terverifikasi.</p>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Verifikasi Konten</h1>
+                    <p class="text-sm font-medium text-slate-500">Tinjau dan verifikasi program beasiswa & kompetisi yang diajukan oleh institusi. Hanya program berstatus <strong>Pending</strong> yang ditampilkan.</p>
                 </div>
             </div>
 
-            <!-- Header Metric Stats -->
+            <!-- Stats Row -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <!-- Queue -->
                 <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm shrink-0">⏳</div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Queue</span>
-                        <p class="text-xl font-black text-slate-800">{{ pendingCount }} items</p>
+                    <div class="h-10 w-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg shrink-0">⏳</div>
+                    <div>
+                        <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Menunggu Review</p>
+                        <p class="text-2xl font-black text-slate-800">{{ pendingCount }}</p>
                     </div>
                 </div>
-                <!-- Approved Today -->
                 <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm shrink-0">✓</div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Approved Today</span>
-                        <p class="text-xl font-black text-slate-800">{{ approvedToday }} items</p>
+                    <div class="h-10 w-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg shrink-0">🎓</div>
+                    <div>
+                        <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Beasiswa</p>
+                        <p class="text-2xl font-black text-slate-800">{{ scholarshipCount }}</p>
                     </div>
                 </div>
-                <!-- Revision Rate -->
                 <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm shrink-0">⚠</div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Revision Rate</span>
-                        <p class="text-xl font-black text-slate-800">{{ revisionRate }}</p>
+                    <div class="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg shrink-0">🏆</div>
+                    <div>
+                        <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Kompetisi</p>
+                        <p class="text-2xl font-black text-slate-800">{{ competitionCount }}</p>
                     </div>
                 </div>
-                <!-- Decline Today -->
                 <div class="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                    <div class="h-9 w-9 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold text-sm shrink-0">✗</div>
-                    <div class="text-left">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Decline Today</span>
-                        <p class="text-xl font-black text-slate-800">{{ declinedToday }} items</p>
+                    <div class="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg shrink-0">✓</div>
+                    <div>
+                        <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Disetujui Hari Ini</p>
+                        <p class="text-2xl font-black text-slate-800">{{ approvedToday }}</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Main Layout -->
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-
-                <!-- Left Panel: Active item detail -->
-                <div class="lg:col-span-8 space-y-6">
-                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm min-h-[400px] flex flex-col justify-between">
-                        <!-- Empty state / Loading state -->
-                        <div v-if="!selectedProgram" class="flex-1 flex items-center justify-center py-16 text-slate-400 font-bold text-sm flex-col gap-3">
-                            <span v-if="activeItem" class="animate-spin h-6 w-6 text-indigo-500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" class="opacity-25"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg></span>
-                            <span>{{ activeItem ? 'Memuat detail program...' : 'Pilih item dari antrean untuk memulai peninjauan.' }}</span>
-                        </div>
-
-                        <!-- Detail view -->
-                        <div v-else class="space-y-6">
-                            <div class="flex justify-between items-start">
-                                <div class="space-y-1">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full border"
-                                            :class="selectedProgram.type === 'Scholarship Content' ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'">
-                                            {{ selectedProgram.type }}
-                                        </span>
-                                        <span v-if="selectedProgram.status === 'pending-resubmit'" class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full bg-orange-50 text-orange-700 border border-orange-100">
-                                            Pending Re-submit
-                                        </span>
-                                    </div>
-                                    <h3 class="text-lg font-black text-slate-800 leading-tight">{{ selectedProgram.name || selectedProgram.judul || selectedProgram.nama }}</h3>
-                                    <p class="text-xs font-semibold text-slate-450">{{ selectedProgram.instansi || 'Instansi' }} • Submitted: {{ selectedProgram.submitted_at }}</p>
-                                </div>
-                                <span class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full bg-amber-50 text-amber-700 border border-amber-100">
-                                    Pending
-                                </span>
-                            </div>
-
-                            <!-- Two column details -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-b border-slate-50 py-6">
-                                <!-- Program Details -->
-                                <div class="space-y-4">
-                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400">Program Details</h4>
-                                    <div class="space-y-2.5 text-xs font-bold">
-                                        <div class="flex justify-between">
-                                            <span class="text-slate-400">{{ selectedProgram.type === 'Scholarship Content' ? 'Nominal Dana' : 'Biaya Pendaftaran' }}</span>
-                                            <span class="text-purple-600">
-                                                {{ selectedProgram.type === 'Scholarship Content'
-                                                    ? `Rp ${(selectedProgram.nominal_dana || selectedProgram.nominal || 0).toLocaleString('id-ID')}`
-                                                    : `Rp ${(selectedProgram.biaya_pendaftaran || selectedProgram.biaya || 0).toLocaleString('id-ID')}` }}
-                                            </span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-slate-400">Tipe</span>
-                                            <span class="text-slate-700">{{ selectedProgram.tipe_beasiswa || selectedProgram.tipe_lomba || selectedProgram.tipe || selectedProgram.type }}</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-slate-400">Kuota</span>
-                                            <span class="text-slate-700">{{ selectedProgram.kuota_pendaftar || selectedProgram.kuota || selectedProgram.quota || '-' }} slots</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-slate-400">Link Info</span>
-                                            <a :href="selectedProgram.link_informasi || selectedProgram.link || selectedProgram.info_link" target="_blank" class="text-purple-600 hover:underline truncate max-w-[120px]">
-                                                {{ selectedProgram.link_informasi || selectedProgram.link || 'Lihat Website ↗' }}
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Description -->
-                                <div class="space-y-4">
-                                    <h4 class="text-[10px] font-black uppercase tracking-wider text-slate-400">Deskripsi Program</h4>
-                                    <div class="bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
-                                        <p class="text-xs leading-relaxed text-slate-500 font-semibold text-justify whitespace-pre-wrap">{{ selectedProgram.deskripsi || selectedProgram.description || 'Deskripsi tidak tersedia.' }}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Action Row: 3 buttons -->
-                            <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                                <button type="button" @click="handleApprove" :disabled="isActioning"
-                                    class="flex-1 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
-                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                    Approve Program
-                                </button>
-                                <button type="button" @click="showRevisionModal = true" :disabled="isActioning"
-                                    class="flex-1 py-3.5 px-4 bg-white hover:bg-amber-50 text-amber-700 disabled:opacity-50 rounded-2xl border border-amber-200 hover:border-amber-300 transition flex items-center justify-center gap-2 cursor-pointer font-bold text-xs">
-                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                    Request Revision
-                                </button>
-                                <button type="button" @click="openRejectModal" :disabled="isActioning"
-                                    class="flex-1 py-3.5 px-4 bg-white hover:bg-red-50 text-red-700 disabled:opacity-50 rounded-2xl border border-red-200 hover:border-red-300 transition flex items-center justify-center gap-2 cursor-pointer font-bold text-xs">
-                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                    Reject Program
-                                </button>
-                            </div>
-                        </div>
+            <!-- Table Card -->
+            <div class="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
+                <!-- Table Toolbar -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-slate-50">
+                    <!-- Type Filter Tabs -->
+                    <div class="flex rounded-xl bg-slate-100 p-1 w-fit">
+                        <button v-for="tab in [{ key: 'All', label: 'Semua' }, { key: 'Scholarship Content', label: 'Beasiswa' }, { key: 'Competition Content', label: 'Kompetisi' }]" :key="tab.key"
+                            type="button" @click="activeTypeFilter = tab.key"
+                            class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none whitespace-nowrap"
+                            :class="activeTypeFilter === tab.key ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'">
+                            {{ tab.label }}
+                        </button>
+                    </div>
+                    <!-- Search -->
+                    <div class="relative w-full sm:w-64">
+                        <svg class="absolute inset-y-0 left-3 h-4 w-4 my-auto text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                        </svg>
+                        <input v-model="searchQuery" type="text" placeholder="Cari nama program..."
+                            class="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition" />
                     </div>
                 </div>
 
-                <!-- Right Panel -->
-                <div class="lg:col-span-4 space-y-6">
-                    <!-- Queue List (oldest first) -->
-                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                        <div class="flex justify-between items-center pb-2">
-                            <h3 class="text-sm font-black text-slate-800 uppercase tracking-wider">Queue ({{ pendingCount }})</h3>
-                        </div>
-                        <div class="space-y-2.5 overflow-y-auto max-h-[280px] pr-1">
-                            <div v-if="sortedQueue.length === 0" class="py-6 text-center text-xs font-bold text-slate-400">Seluruh antrean program telah selesai dikurasi. Belum ada program baru masuk.</div>
-                            <div v-for="item in sortedQueue" :key="item.id"
-                                @click="selectItem(item)"
-                                class="p-3.5 border rounded-2xl cursor-pointer transition duration-150 flex items-center justify-between text-left group"
-                                :class="activeItem?.id === item.id ? 'bg-purple-50/50 border-purple-200 shadow-sm' : 'border-slate-100 hover:bg-slate-50/50 hover:border-slate-200'">
-                                <div class="flex items-center gap-3">
-                                    <div class="h-8 w-8 rounded-xl flex items-center justify-center font-bold text-xs shadow-inner"
-                                        :class="item.type === 'Scholarship Content' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'">
-                                        {{ item.name.charAt(0) }}
-                                    </div>
-                                    <div class="space-y-0.5">
-                                        <p class="text-xs font-bold text-slate-800 truncate max-w-[150px] leading-tight">{{ item.name }}</p>
-                                        <div class="flex items-center gap-1.5">
-                                            <p class="text-[9px] font-semibold text-slate-400">Submitted: {{ item.submitted_at }}</p>
-                                            <span v-if="item.status === 'pending-resubmit'" class="text-[8px] font-black text-orange-600 bg-orange-50 px-1 rounded">Re-submit</span>
+                <!-- Loading Skeleton -->
+                <div v-if="isLoading" class="p-6 space-y-3">
+                    <div v-for="n in 4" :key="n" class="h-14 w-full bg-slate-100 rounded-2xl animate-pulse"></div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else-if="filteredQueue.length === 0" class="py-20 flex flex-col items-center justify-center text-center gap-3">
+                    <span class="text-5xl">🎉</span>
+                    <p class="text-sm font-bold text-slate-500">
+                        {{ searchQuery ? `Tidak ada program yang cocok dengan "${searchQuery}"` : 'Tidak ada program yang menunggu verifikasi saat ini.' }}
+                    </p>
+                    <p v-if="!searchQuery" class="text-xs font-semibold text-slate-400">Semua program telah diverifikasi.</p>
+                </div>
+
+                <!-- Data Table -->
+                <div v-else class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-50 bg-slate-50/60">
+                                <th class="text-left text-[10px] font-black uppercase tracking-wider text-slate-400 px-6 py-3.5">Nama Program</th>
+                                <th class="text-left text-[10px] font-black uppercase tracking-wider text-slate-400 px-4 py-3.5 hidden md:table-cell">Kategori</th>
+                                <th class="text-left text-[10px] font-black uppercase tracking-wider text-slate-400 px-4 py-3.5 hidden lg:table-cell">Tgl. Pengajuan</th>
+                                <th class="text-center text-[10px] font-black uppercase tracking-wider text-slate-400 px-4 py-3.5">Status</th>
+                                <th class="text-right text-[10px] font-black uppercase tracking-wider text-slate-400 px-6 py-3.5">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="item in filteredQueue" :key="`${item.type}-${item.id}`"
+                                class="hover:bg-slate-50/60 transition group">
+                                <!-- Program Name -->
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="h-9 w-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0"
+                                            :class="item.type === 'Scholarship Content' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'">
+                                            {{ item.type === 'Scholarship Content' ? '🎓' : '🏆' }}
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-black text-slate-800 truncate max-w-[220px] leading-tight">{{ item.name }}</p>
+                                            <p class="text-[10px] font-semibold text-slate-400 mt-0.5 md:hidden">{{ item.submission_date }}</p>
                                         </div>
                                     </div>
-                                </div>
-                                <svg class="h-4 w-4 text-slate-400 group-hover:translate-x-0.5 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-                            </div>
-                        </div>
-                    </div>
+                                </td>
+                                <!-- Category -->
+                                <td class="px-4 py-4 hidden md:table-cell">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border"
+                                        :class="item.type === 'Scholarship Content'
+                                            ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                            : 'bg-indigo-50 text-indigo-700 border-indigo-100'">
+                                        {{ item.type === 'Scholarship Content' ? 'Beasiswa' : 'Kompetisi' }}
+                                    </span>
+                                </td>
+                                <!-- Submission Date -->
+                                <td class="px-4 py-4 hidden lg:table-cell">
+                                    <p class="text-xs font-bold text-slate-500">{{ item.submission_date || '-' }}</p>
+                                </td>
+                                <!-- Status -->
+                                <td class="px-4 py-4 text-center">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide"
+                                        :class="item.status === 'pending-resubmit'
+                                            ? 'bg-orange-50 text-orange-700 border border-orange-100'
+                                            : 'bg-amber-50 text-amber-700 border border-amber-100'">
+                                        {{ item.status === 'pending-resubmit' ? 'Re-submit' : 'Pending' }}
+                                    </span>
+                                </td>
+                                <!-- Actions -->
+                                <td class="px-6 py-4 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <!-- Review Detail Button -->
+                                        <button type="button" @click="openDetail(item)"
+                                            class="px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-100 transition cursor-pointer">
+                                            Detail
+                                        </button>
+                                        <!-- Approve -->
+                                        <button type="button"
+                                            @click="activeItem = item; handleApprove()"
+                                            :disabled="isActioning"
+                                            class="px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl border border-emerald-100 transition disabled:opacity-50 cursor-pointer">
+                                            Setujui
+                                        </button>
+                                        <!-- Reject -->
+                                        <button type="button"
+                                            @click="activeItem = item; openRejectModal()"
+                                            :disabled="isActioning"
+                                            class="px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-red-700 bg-red-50 hover:bg-red-100 rounded-xl border border-red-100 transition disabled:opacity-50 cursor-pointer">
+                                            Tolak
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
-                    <!-- Review Guidelines -->
-                    <div class="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
-                        <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider text-left">Review Guidelines</h4>
-                        <p class="text-[11px] font-semibold text-slate-450 leading-relaxed text-justify">
-                            Pastikan semua submission memenuhi standar akademik premium ScholarPath.
-                        </p>
-                        <div class="space-y-2.5 text-xs text-slate-700 font-bold">
-                            <div class="flex items-center gap-2.5">
-                                <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
-                                <span>Institutional ID Verified</span>
-                            </div>
-                            <div class="flex items-center gap-2.5">
-                                <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
-                                <span>No Spelling Errors</span>
-                            </div>
-                            <div class="flex items-center gap-2.5">
-                                <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
-                                <span>Media & Links Valid</span>
-                            </div>
-                            <div class="flex items-center gap-2.5">
-                                <span class="h-5 w-5 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center font-bold text-xs">✓</span>
-                                <span>Persyaratan Dokumen Lengkap</span>
-                            </div>
-                        </div>
-                    </div>
+                <!-- Table Footer -->
+                <div v-if="!isLoading && filteredQueue.length > 0" class="px-6 py-3 border-t border-slate-50 flex items-center justify-between">
+                    <p class="text-[11px] font-bold text-slate-400">Menampilkan {{ filteredQueue.length }} dari {{ pendingCount }} program pending.</p>
                 </div>
             </div>
         </div>
 
-        <!-- Modal: Request Revision -->
+        <!-- ── DETAIL SIDE PANEL ─────────────────────────────────────────── -->
+        <transition name="slide-panel">
+            <div v-if="activeItem" class="fixed inset-0 z-40 flex justify-end">
+                <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" @click="closeDetail"></div>
+                <div class="relative z-10 w-full max-w-lg bg-white shadow-2xl flex flex-col overflow-y-auto">
+                    <!-- Panel Header -->
+                    <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100 sticky top-0 bg-white z-10">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl">{{ activeItem.type === 'Scholarship Content' ? '🎓' : '🏆' }}</span>
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-wider text-slate-400">{{ activeItem.type === 'Scholarship Content' ? 'Beasiswa' : 'Kompetisi' }}</p>
+                                <h2 class="text-sm font-black text-slate-800 leading-tight truncate max-w-[280px]">{{ activeItem.name }}</h2>
+                            </div>
+                        </div>
+                        <button @click="closeDetail" type="button" class="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition text-xl cursor-pointer">&times;</button>
+                    </div>
+
+                    <!-- Panel Body -->
+                    <div class="flex-1 p-6 space-y-6">
+                        <!-- Loading -->
+                        <div v-if="!selectedProgram" class="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                            <svg class="animate-spin h-6 w-6 text-indigo-500" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            <p class="text-xs font-bold">Memuat detail program...</p>
+                        </div>
+
+                        <!-- Detail Content -->
+                        <template v-else>
+                            <!-- Status Badge Row -->
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="px-2.5 py-1 text-[10px] font-black uppercase tracking-wide rounded-full border"
+                                    :class="activeItem.type === 'Scholarship Content' ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'">
+                                    {{ activeItem.type === 'Scholarship Content' ? 'Beasiswa' : 'Kompetisi' }}
+                                </span>
+                                <span class="px-2.5 py-1 text-[10px] font-black uppercase tracking-wide rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                                    {{ activeItem.status === 'pending-resubmit' ? 'Re-submit Pending' : 'Pending Review' }}
+                                </span>
+                            </div>
+
+                            <!-- Key Details Grid -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-slate-50 rounded-2xl p-4 space-y-1">
+                                    <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tgl. Pengajuan</p>
+                                    <p class="text-xs font-black text-slate-800">{{ selectedProgram.submission_date || '-' }}</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-2xl p-4 space-y-1">
+                                    <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">Kuota</p>
+                                    <p class="text-xs font-black text-slate-800">{{ selectedProgram.kuota_pendaftar ?? selectedProgram.kuota ?? '-' }}</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-2xl p-4 space-y-1 col-span-2">
+                                    <p class="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                                        {{ activeItem.type === 'Scholarship Content' ? 'Nominal Dana' : 'Biaya Pendaftaran' }}
+                                    </p>
+                                    <p class="text-xs font-black text-purple-600">
+                                        Rp {{ Number(selectedProgram.nominal_dana ?? selectedProgram.biaya_pendaftaran ?? 0).toLocaleString('id-ID') }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Description -->
+                            <div class="space-y-2">
+                                <p class="text-[10px] font-black uppercase tracking-wider text-slate-400">Deskripsi Program</p>
+                                <div class="bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                                    <p class="text-xs text-slate-600 font-semibold leading-relaxed whitespace-pre-wrap">
+                                        {{ selectedProgram.deskripsi || selectedProgram.description || 'Deskripsi tidak tersedia.' }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Link -->
+                            <div v-if="selectedProgram.link_informasi || selectedProgram.link" class="space-y-1">
+                                <p class="text-[10px] font-black uppercase tracking-wider text-slate-400">Link Informasi</p>
+                                <a :href="selectedProgram.link_informasi || selectedProgram.link" target="_blank"
+                                    class="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline">
+                                    {{ selectedProgram.link_informasi || selectedProgram.link }} ↗
+                                </a>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Panel Footer: Action Buttons -->
+                    <div v-if="selectedProgram" class="sticky bottom-0 bg-white border-t border-slate-100 px-6 py-4 flex flex-col sm:flex-row gap-3">
+                        <button type="button" @click="handleApprove" :disabled="isActioning"
+                            class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-black rounded-2xl shadow-md shadow-emerald-600/10 transition flex items-center justify-center gap-2 cursor-pointer">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                            Setujui
+                        </button>
+                        <button type="button" @click="showRevisionModal = true" :disabled="isActioning"
+                            class="flex-1 py-3 bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 hover:border-amber-300 disabled:opacity-50 text-xs font-black rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                            Revisi
+                        </button>
+                        <button type="button" @click="openRejectModal" :disabled="isActioning"
+                            class="flex-1 py-3 bg-white hover:bg-red-50 text-red-700 border border-red-200 hover:border-red-300 disabled:opacity-50 text-xs font-black rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            Tolak
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- ── REVISION MODAL ────────────────────────────────────────────── -->
         <transition name="fade">
             <div v-if="showRevisionModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
                 <div class="absolute inset-0" @click="showRevisionModal = false"></div>
-                <div class="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-lg w-full relative z-10 animate-scale text-left">
-                    <div class="flex justify-between items-start mb-6">
+                <div class="relative z-10 bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-lg w-full animate-scale text-left">
+                    <div class="flex justify-between items-center mb-6">
                         <h3 class="text-lg font-black text-slate-800">Ajukan Permintaan Revisi</h3>
-                        <button type="button" @click="showRevisionModal = false" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                        <button type="button" @click="showRevisionModal = false" class="text-slate-400 hover:text-slate-600 text-xl cursor-pointer">&times;</button>
                     </div>
                     <form @submit.prevent="handleRequestRevision" class="space-y-4">
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Program Target</label>
-                            <input type="text" :value="activeItem?.name" disabled class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-500 font-bold"/>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Program Target</label>
+                            <input type="text" :value="activeItem?.name" disabled class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 font-bold" />
                         </div>
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Instruksi Revisi untuk Instansi</label>
-                            <textarea v-model="revisionFeedback" required rows="5" placeholder="Jelaskan bagian apa yang perlu direvisi..." class="w-full px-4 py-2.5 border border-slate-150 focus:border-purple-500 rounded-xl text-xs text-slate-800 transition outline-none resize-none"></textarea>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Instruksi Revisi *</label>
+                            <textarea v-model="revisionFeedback" required rows="5"
+                                placeholder="Jelaskan bagian apa yang perlu direvisi secara detail..."
+                                class="w-full px-4 py-2.5 border border-slate-200 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 rounded-xl text-xs text-slate-800 transition outline-none resize-none">
+                            </textarea>
                         </div>
                         <div class="flex gap-3 pt-4 border-t border-slate-50">
                             <button type="button" @click="showRevisionModal = false" class="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-2xl border transition cursor-pointer">Batal</button>
-                            <button type="submit" :disabled="isActioning" class="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow transition cursor-pointer">
-                                <svg v-if="isActioning" class="animate-spin h-4 w-4 text-white mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <button type="submit" :disabled="isActioning || !revisionFeedback.trim()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-black rounded-2xl shadow transition cursor-pointer">
+                                <span v-if="isActioning" class="flex items-center justify-center gap-2">
+                                    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                    Mengirim...
+                                </span>
                                 <span v-else>Kirim Permintaan Revisi</span>
                             </button>
                         </div>
@@ -426,35 +503,42 @@ const handleReject = async () => {
             </div>
         </transition>
 
-        <!-- Modal: Reject Program -->
+        <!-- ── REJECT MODAL ──────────────────────────────────────────────── -->
         <transition name="fade">
             <div v-if="showRejectModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
                 <div class="absolute inset-0" @click="showRejectModal = false"></div>
-                <div class="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-lg w-full relative z-10 animate-scale text-left">
-                    <div class="flex justify-between items-start mb-6">
+                <div class="relative z-10 bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 max-w-lg w-full animate-scale text-left">
+                    <div class="flex justify-between items-center mb-6">
                         <h3 class="text-lg font-black text-slate-800">Tolak Program</h3>
-                        <button type="button" @click="showRejectModal = false" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+                        <button type="button" @click="showRejectModal = false" class="text-slate-400 hover:text-slate-600 text-xl cursor-pointer">&times;</button>
                     </div>
                     <form @submit.prevent="handleReject" class="space-y-4">
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Program Target</label>
-                            <input type="text" :value="activeItem?.name" disabled class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-500 font-bold"/>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Program Target</label>
+                            <input type="text" :value="activeItem?.name" disabled class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 font-bold" />
                         </div>
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Judul Alasan Penolakan *</label>
-                            <input type="text" v-model="rejectTitle" required placeholder="Contoh: Informasi Tidak Lengkap" class="w-full px-4 py-2.5 border border-slate-150 focus:border-red-400 rounded-xl text-xs text-slate-800 transition outline-none"/>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Judul Alasan Penolakan *</label>
+                            <input type="text" v-model="rejectTitle" required placeholder="Contoh: Informasi Tidak Lengkap"
+                                class="w-full px-4 py-2.5 border border-slate-200 focus:border-red-400 focus:ring-1 focus:ring-red-400 rounded-xl text-xs text-slate-800 transition outline-none" />
                         </div>
                         <div>
-                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-1.5 block">Deskripsi Penolakan *</label>
-                            <textarea v-model="rejectDesc" required rows="4" placeholder="Jelaskan alasan penolakan program ini secara detail..." class="w-full px-4 py-2.5 border border-slate-150 focus:border-red-400 rounded-xl text-xs text-slate-800 transition outline-none resize-none"></textarea>
+                            <label class="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 block">Deskripsi Penolakan *</label>
+                            <textarea v-model="rejectDesc" required rows="4"
+                                placeholder="Jelaskan alasan penolakan secara detail..."
+                                class="w-full px-4 py-2.5 border border-slate-200 focus:border-red-400 focus:ring-1 focus:ring-red-400 rounded-xl text-xs text-slate-800 transition outline-none resize-none">
+                            </textarea>
                         </div>
                         <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 font-semibold">
-                            ⚠ Program yang ditolak akan dihapus dari antrean dan instansi akan menerima notifikasi penolakan.
+                            ⚠ Program yang ditolak akan dihapus dari antrean dan instansi akan menerima notifikasi.
                         </div>
                         <div class="flex gap-3 pt-4 border-t border-slate-50">
                             <button type="button" @click="showRejectModal = false" class="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-2xl border transition cursor-pointer">Batal</button>
-                            <button type="submit" :disabled="isActioning" class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold rounded-2xl shadow transition cursor-pointer">
-                                <svg v-if="isActioning" class="animate-spin h-4 w-4 text-white mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <button type="submit" :disabled="isActioning || !rejectTitle.trim() || !rejectDesc.trim()" class="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-black rounded-2xl shadow transition cursor-pointer">
+                                <span v-if="isActioning" class="flex items-center justify-center gap-2">
+                                    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                    Menolak...
+                                </span>
                                 <span v-else>Konfirmasi Tolak Program</span>
                             </button>
                         </div>
@@ -468,9 +552,17 @@ const handleReject = async () => {
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.25s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
 .toast-enter-active, .toast-leave-active { transition: all 0.3s ease; }
 .toast-enter-from { opacity: 0; transform: translateY(-20px); }
 .toast-leave-to { opacity: 0; transform: scale(0.9); }
+
+.slide-panel-enter-active, .slide-panel-leave-active { transition: opacity 0.3s ease; }
+.slide-panel-enter-from, .slide-panel-leave-to { opacity: 0; }
+.slide-panel-enter-active .relative, .slide-panel-leave-active .relative { transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1); }
+.slide-panel-enter-from .relative { transform: translateX(100%); }
+.slide-panel-leave-to .relative { transform: translateX(100%); }
+
 .animate-scale { animation: scaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
 @keyframes scaleIn {
     from { opacity: 0; transform: scale(0.92) translateY(10px); }

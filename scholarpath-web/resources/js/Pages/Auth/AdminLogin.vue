@@ -73,7 +73,7 @@ const submit = async () => {
 
 <template>
     <GuestLayout>
-        <Head title="Admin Console Login" />
+        <Head title="Masuk Konsol Admin" />
 
         <!-- Brand Icon / Accent -->
         <div class="mb-4 text-center">

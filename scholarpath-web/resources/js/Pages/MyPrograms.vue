@@ -111,10 +111,19 @@ const trackingList = computed(() => {
     userPendaftarans.value.forEach(p => {
         const rawDeadline = p.program_deadline || p.beasiswa?.deadline || p.olimpiade?.deadline || null;
         const { date, days } = calculateDeadline(rawDeadline);
+        
+        let displayTitle = p.program_title;
+        if (p.alasan && p.alasan.includes('[AI-PROGRAM:')) {
+            const match = p.alasan.match(/\[AI-PROGRAM:\s*(.*?)\]/);
+            if (match && match[1]) {
+                displayTitle = match[1].trim();
+            }
+        }
+        
         list.push({
             id: p.pendaftaran_id,
             rawId: p.pendaftaran_id,
-            title: p.program_title,
+            title: displayTitle,
             type: p.program_type || 'Beasiswa',
             source: 'applied',
             status: p.status_name || 'Applied',
@@ -149,16 +158,19 @@ const filteredTrackings = computed(() => {
     let result = trackingList.value;
 
     // Filter by type
-    if (activeFilter.value === 'Scholarships') {
+    if (activeFilter.value === 'Scholarships' || activeFilter.value === 'Beasiswa') {
         result = result.filter(item => item.type === 'Beasiswa' || item.type?.toLowerCase() === 'scholarship');
-    } else if (activeFilter.value === 'Competitions') {
-        result = result.filter(item => item.type === 'Lomba' || item.type === 'Olimpiade' || item.type?.toLowerCase() === 'lomba');
+    } else if (activeFilter.value === 'Competitions' || activeFilter.value === 'Olimpiade' || activeFilter.value === 'Kompetisi') {
+        result = result.filter(item => {
+            const t = item.type?.toLowerCase() || '';
+            return t === 'lomba' || t === 'olimpiade' || t === 'competition';
+        });
     }
 
     // Search by title
     if (search.value) {
         const query = search.value.toLowerCase();
-        result = result.filter(item => item.title.toLowerCase().includes(query));
+        result = result.filter(item => (item.title || '').toLowerCase().includes(query));
     }
 
     return result;
@@ -257,21 +269,21 @@ onMounted(() => {
 </script>
 
 <template>
-    <Head title="My Programs" />
+    <Head title="Program Saya" />
 
     <AuthenticatedLayout>
         <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold transition-all duration-300"
+            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-sm font-bold transition-all duration-300 text-white"
                 :class="{
-                    'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success',
-                    'bg-amber-50 text-amber-800 border-amber-100': messageToast.type === 'warning',
-                    'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error'
+                    'bg-emerald-500': messageToast.type === 'success',
+                    'bg-amber-400 !text-slate-900': messageToast.type === 'warning',
+                    'bg-red-500': messageToast.type === 'error'
                 }"
             >
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
-                <span v-else-if="messageToast.type === 'warning'" class="h-5 w-5 bg-amber-500 text-white rounded-full flex items-center justify-center text-xs">!</span>
-                <span v-else class="h-5 w-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs">×</span>
+                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+                <span v-else-if="messageToast.type === 'warning'" class="h-5 w-5 bg-black/20 text-slate-900 rounded-full flex items-center justify-center text-xs">!</span>
+                <span v-else class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-xs">×</span>
                 {{ messageToast.text }}
             </div>
         </transition>
@@ -280,7 +292,7 @@ onMounted(() => {
             
             <!-- Page Header -->
             <div class="space-y-1">
-                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">My Programs</h1>
+                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Program Saya</h1>
                 <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
                     Pantau status pendaftaran beasiswa dan kompetisi aktif Anda di satu tempat.
                 </p>
@@ -291,12 +303,12 @@ onMounted(() => {
                 <!-- Saved -->
                 <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Saved</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Tersimpan</span>
                         <span class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/60">+12%</span>
                     </div>
                     <div class="flex items-baseline gap-2">
                         <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.saved }}</span>
-                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">programs</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">program</span>
                     </div>
                     <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -308,12 +320,12 @@ onMounted(() => {
                 <!-- Applied -->
                 <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Applied</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Terdaftar</span>
                         <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800/60">+5%</span>
                     </div>
                     <div class="flex items-baseline gap-2">
                         <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.applied }}</span>
-                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">submissions</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">pengajuan</span>
                     </div>
                     <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -325,12 +337,12 @@ onMounted(() => {
                 <!-- Pending / In Progress -->
                 <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Pending</span>
-                        <span class="text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-100 dark:border-slate-700">In Progress</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Menunggu</span>
+                        <span class="text-[10px] font-black text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-100 dark:border-slate-700">Sedang Diproses</span>
                     </div>
                     <div class="flex items-baseline gap-2">
                         <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.interviews }}</span>
-                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">pending</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">menunggu</span>
                     </div>
                     <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -342,12 +354,12 @@ onMounted(() => {
                 <!-- Results -->
                 <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
                     <div class="flex justify-between items-start">
-                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Results</span>
-                        <span class="text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-800/60">New</span>
+                        <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Hasil</span>
+                        <span class="text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-800/60">Baru</span>
                     </div>
                     <div class="flex items-baseline gap-2">
                         <span class="text-3xl font-black text-slate-800 dark:text-white">{{ stats.results }}</span>
-                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">decisions</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">keputusan</span>
                     </div>
                     <div class="absolute -right-3 -bottom-3 text-slate-50 dark:text-slate-800 opacity-5 group-hover:scale-110 transition duration-300 pointer-events-none">
                         <svg class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -361,20 +373,20 @@ onMounted(() => {
             <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
                 <!-- Table Header Controls -->
                 <div class="p-6 border-b border-slate-50 dark:border-slate-800/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h2 class="text-lg font-black text-slate-800 dark:text-white">Active Trackings</h2>
+                    <h2 class="text-lg font-black text-slate-800 dark:text-white">Pelacakan Aktif</h2>
                     
                     <div class="flex flex-col sm:flex-row items-center gap-3">
                         <!-- Filters -->
                         <div class="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 w-full sm:w-auto">
                             <button
-                                v-for="filt in ['All', 'Scholarships', 'Competitions']"
-                                :key="filt"
+                                v-for="filt in [{ key: 'All', label: 'Semua' }, { key: 'Scholarships', label: 'Beasiswa' }, { key: 'Competitions', label: 'Olimpiade' }]"
+                                :key="filt.key"
                                 type="button"
-                                @click="activeFilter = filt; currentPage = 1"
+                                @click="activeFilter = filt.key; currentPage = 1"
                                 class="px-4 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
-                                :class="activeFilter === filt ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
+                                :class="activeFilter === filt.key ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
                             >
-                                {{ filt }}
+                                {{ filt.label }}
                             </button>
                         </div>
 
@@ -388,7 +400,7 @@ onMounted(() => {
                             <input
                                 type="text"
                                 v-model="search"
-                                placeholder="Search Insights..."
+                                placeholder="Cari program..."
                                 class="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500 dark:focus:border-indigo-500 rounded-xl text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 transition outline-none"
                             />
                         </div>
@@ -400,15 +412,25 @@ onMounted(() => {
                     <table class="w-full border-collapse text-left">
                         <thead>
                             <tr class="border-b border-slate-50 dark:border-slate-800/60 bg-slate-50/20 dark:bg-slate-800/20 text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider">
-                                <th class="py-4 px-6">Program Name</th>
-                                <th class="py-4 px-6">Type</th>
+                                <th class="py-4 px-6">Nama Program</th>
+                                <th class="py-4 px-6">Tipe</th>
                                 <th class="py-4 px-6">Status</th>
-                                <th class="py-4 px-6">Deadline</th>
-                                <th class="py-4 px-6 text-right">Actions</th>
+                                <th class="py-4 px-6">Batas Waktu</th>
+                                <th class="py-4 px-6 text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50 dark:divide-slate-800/60 text-xs">
-                            <tr v-for="item in paginatedTrackings" :key="item.id" class="hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition duration-150">
+                            <template v-if="isLoadingData">
+                                <tr v-for="n in 3" :key="'skel-'+n" class="animate-pulse">
+                                    <td class="py-4 px-6"><div class="h-8 w-3/4 bg-slate-100 dark:bg-slate-800 rounded-xl"></div></td>
+                                    <td class="py-4 px-6"><div class="h-4 w-1/2 bg-slate-100 dark:bg-slate-800 rounded"></div></td>
+                                    <td class="py-4 px-6"><div class="h-6 w-1/2 bg-slate-100 dark:bg-slate-800 rounded-full"></div></td>
+                                    <td class="py-4 px-6"><div class="h-4 w-1/2 bg-slate-100 dark:bg-slate-800 rounded"></div></td>
+                                    <td class="py-4 px-6"><div class="h-8 w-full bg-slate-100 dark:bg-slate-800 rounded-xl"></div></td>
+                                </tr>
+                            </template>
+                            <template v-else-if="paginatedTrackings.length > 0">
+                                <tr v-for="item in paginatedTrackings" :key="item.id" class="hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition duration-150">
                                 <!-- Program Name -->
                                 <td class="py-4 px-6">
                                     <div class="flex items-center gap-3">
@@ -462,7 +484,7 @@ onMounted(() => {
                                         @click="openDetail(item)"
                                         class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-bold hover:underline"
                                     >
-                                        View Detail
+                                        Lihat Detail
                                     </button>
                                     <span class="text-slate-300 dark:text-slate-600">|</span>
                                     <button
@@ -471,7 +493,7 @@ onMounted(() => {
                                         @click="handleDeleteItem(item)"
                                         class="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 font-bold hover:underline disabled:opacity-50"
                                     >
-                                        Cancel
+                                        Batal
                                     </button>
                                 </td>
                             </tr>
@@ -481,6 +503,14 @@ onMounted(() => {
                                     Tidak ada data pendaftaran aktif ditemukan.
                                 </td>
                             </tr>
+                            </template>
+                            <template v-else>
+                                <tr>
+                                    <td colspan="5" class="py-8 text-center text-slate-500 dark:text-slate-400 font-medium text-xs">
+                                        Tidak ada data yang ditemukan.
+                                    </td>
+                                </tr>
+                            </template>
                         </tbody>
                     </table>
                 </div>
@@ -488,7 +518,7 @@ onMounted(() => {
                 <!-- Table Pagination -->
                 <div class="p-6 border-t border-slate-50 dark:border-slate-800/60 flex items-center justify-between">
                     <span class="text-xs font-bold text-slate-400 dark:text-slate-500">
-                        Showing {{ Math.min(filteredTrackings.length, (currentPage - 1) * itemsPerPage + 1) }} to {{ Math.min(filteredTrackings.length, currentPage * itemsPerPage) }} of {{ filteredTrackings.length }} programs
+                        Menampilkan {{ Math.min(filteredTrackings.length, (currentPage - 1) * itemsPerPage + 1) }} sampai {{ Math.min(filteredTrackings.length, currentPage * itemsPerPage) }} dari {{ filteredTrackings.length }} program
                     </span>
 
                     <div class="flex items-center gap-1">

@@ -84,7 +84,7 @@ onMounted(async () => {
     try {
         const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
         const res = await axios.get(`${backendUrl}/instansi`, { headers: { Authorization: `Bearer ${token}` } });
-        if (res.data?.data?.length) {
+        if (res.data && res.data.data) {
             institutions.value = res.data.data.map((i, idx) => ({
                 ...i,
                 registered_at: i.registered_at || daysAgo(idx * 2 + 1),
@@ -102,7 +102,7 @@ onMounted(async () => {
 // ACCEPT
 const handleAccept = async (inst) => {
     // Guardrail: jangan bisa accept jika dokumen belum ada
-    if (!inst.sk_document || !inst.legal_document) {
+    if (!inst.sk_file || !inst.mitra_file) {
         showToast('Berkas dokumen instansi belum lengkap. Tidak bisa diverifikasi!', 'error');
         return;
     }
@@ -178,7 +178,7 @@ const handleReexamine = (inst) => {
 </script>
 
 <template>
-    <Head title="Institution Verification" />
+    <Head title="Verifikasi Institusi" />
 
     <AdminLayout>
         <!-- Toast -->
@@ -194,13 +194,13 @@ const handleReexamine = (inst) => {
             <!-- Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
-                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Institution Verification</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Verifikasi Institusi</h1>
                     <p class="text-sm font-medium text-slate-500">Tinjau berkas legalitas institusi dan berikan keputusan verifikasi.</p>
                 </div>
                 <div class="flex items-center gap-3 self-start sm:self-auto">
                     <button class="px-4 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5">
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        Export Report
+                        Ekspor Laporan
                     </button>
                 </div>
             </div>
@@ -209,7 +209,7 @@ const handleReexamine = (inst) => {
             <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <!-- Pending Requests -->
                 <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-28">
-                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Pending Request</span>
+                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Pengajuan Menunggu</span>
                     <div class="flex items-baseline justify-between mt-1">
                         <p class="text-2xl font-black text-slate-800">{{ pendingCount }}</p>
                         <span class="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-100">Menunggu</span>
@@ -217,7 +217,7 @@ const handleReexamine = (inst) => {
                 </div>
                 <!-- Verified Today -->
                 <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-28">
-                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Verified Today</span>
+                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Diverifikasi Hari Ini</span>
                     <div class="flex items-baseline justify-between mt-1">
                         <p class="text-2xl font-black text-slate-800">{{ verifiedToday.toString().padStart(2,'0') }}</p>
                         <span class="text-[9px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-100">✓ Sukses</span>
@@ -225,7 +225,7 @@ const handleReexamine = (inst) => {
                 </div>
                 <!-- Reject Today -->
                 <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-28">
-                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Reject Today</span>
+                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Ditolak Hari Ini</span>
                     <div class="flex items-baseline justify-between mt-1">
                         <p class="text-2xl font-black text-slate-800">{{ rejectedToday.toString().padStart(2,'0') }}</p>
                         <span class="text-[9px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100">Ditolak</span>
@@ -233,7 +233,7 @@ const handleReexamine = (inst) => {
                 </div>
                 <!-- Total Partners -->
                 <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex flex-col justify-between h-28">
-                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Total Partners</span>
+                    <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Total Mitra</span>
                     <div class="flex items-baseline justify-between mt-1">
                         <p class="text-2xl font-black text-slate-800">{{ totalPartners.toLocaleString('id-ID') }}</p>
                         <span class="text-[9px] font-semibold text-slate-450">Aktif</span>
@@ -260,7 +260,7 @@ const handleReexamine = (inst) => {
                                     <h3 class="text-base font-black text-slate-800 leading-tight">{{ inst.nama }}</h3>
                                     <span class="px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full"
                                         :class="{ 'bg-amber-50 text-amber-700 border border-amber-100': !inst.is_verified && !inst.is_flagged, 'bg-emerald-50 text-emerald-700 border border-emerald-100': inst.is_verified, 'bg-red-50 text-red-700 border border-red-100': inst.is_flagged }">
-                                        {{ inst.is_flagged ? 'DITOLAK' : (inst.is_verified ? 'VERIFIED' : 'PENDING REVIEW') }}
+                                        {{ inst.is_flagged ? 'DITOLAK' : (inst.is_verified ? 'TERVERIFIKASI' : 'MENUNGGU PENINJAUAN') }}
                                     </span>
                                 </div>
                                 <p class="text-xs font-semibold text-slate-500">{{ inst.alamat }}</p>
@@ -340,7 +340,7 @@ const handleReexamine = (inst) => {
                             <template v-if="inst.is_flagged">
                                 <button type="button" @click="handleReexamine(inst)"
                                     class="px-5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer">
-                                    Re-examine
+                                    Tinjau Ulang
                                 </button>
                             </template>
                             <template v-else>
@@ -354,7 +354,7 @@ const handleReexamine = (inst) => {
                                             ? 'border-red-200 hover:bg-red-50 text-red-700 cursor-pointer'
                                             : 'border-slate-100 text-slate-300 opacity-40 cursor-not-allowed pointer-events-none'
                                     ]">
-                                    Reject
+                                    Tolak
                                 </button>
 
                                 <!-- Accept button — disabled if documents missing -->
@@ -368,7 +368,7 @@ const handleReexamine = (inst) => {
                                             : 'bg-slate-200 text-slate-400 opacity-40 cursor-not-allowed pointer-events-none'
                                     ]">
                                     <svg v-if="isActioning" class="animate-spin h-4 w-4 text-white mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                    <span v-else>Accept</span>
+                                    <span v-else>Setujui</span>
                                 </button>
                             </template>
                         </div>

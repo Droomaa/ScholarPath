@@ -5,6 +5,9 @@ import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
 const today = new Date().toISOString().split('T')[0];
+
+const getAuthToken = () => localStorage.getItem('auth_token');
+
 const rawLogs = ref([
     { timestamp: today + ' 08:12:05', level: 'INFO', actor: 'Budi Santoso', category: 'Program-Management', message: 'User Budi Santoso berhasil mendaftar ke Beasiswa Prestasi Utama.' },
     { timestamp: today + ' 08:15:30', level: 'INFO', actor: 'Tech Academy', category: 'Auth', message: 'Instansi Tech Academy mengunggah berkas legalitas SK Izin Operasional.' },
@@ -45,6 +48,26 @@ const showToast = (text, type = 'success') => {
         messageToast.value = { text: '', type: '' };
     }, 4000);
 };
+
+onMounted(async () => {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        const res = await axios.get(`${backendUrl}/admin/logs`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.data && res.data.data && res.data.data.length > 0) {
+            rawLogs.value = res.data.data.map(log => ({
+                timestamp: log.timestamp || log.created_at,
+                level: log.level || 'INFO',
+                actor: log.actor || 'System',
+                category: log.category || 'General',
+                message: log.message
+            }));
+        }
+    } catch (e) {
+        // silently fallback to mock data
+    }
+});
 
 // Apply filter explicitly when button is clicked
 const applyFilters = () => {
@@ -116,12 +139,18 @@ const runAIDiagnostic = async () => {
     showToast('Memulai audit diagnosik kecocokan ScholarBot V2...', 'success');
 
     try {
-        // We evaluate text similarity using the AI matcher microservice
-        const response = await axios.post('http://localhost:8001/api/match', {
+        const payload = {
             user_skill: "Machine Learning, Python, backend engineer, API development",
             beasiswa_requirement: "Dibutuhkan keahlian Python, Flask/FastAPI, dan integrasi backend AI.",
             top_k: 1
-        });
+        };
+
+        let response;
+        try {
+            response = await axios.post('http://localhost:8000/api/match', payload);
+        } catch (e) {
+            response = await axios.post('http://localhost:8001/api/match', payload);
+        }
 
         const score = response.data?.match_score || 88.5;
         const now = new Date();
@@ -165,18 +194,19 @@ const exportCSV = () => {
 </script>
 
 <template>
-    <Head title="System Logs" />
+    <Head title="Log Sistem" />
 
     <AdminLayout>
         <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold transition-all duration-300"
+            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-sm font-bold transition-all duration-300 text-white"
                 :class="{
-                    'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success',
-                    'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error'
+                    'bg-emerald-500': messageToast.type === 'success',
+                    'bg-red-500': messageToast.type === 'error'
                 }"
             >
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+                <span v-else class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-xs">×</span>
                 {{ messageToast.text }}
             </div>
         </transition>
@@ -185,8 +215,8 @@ const exportCSV = () => {
             <!-- Header Section -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
-                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">System Logs</h1>
-                    <p class="text-sm font-medium text-slate-500">Real-time monitoring of ScholarPath core activities and security events.</p>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Log Sistem</h1>
+                    <p class="text-sm font-medium text-slate-500">Pemantauan real-time aktivitas utama dan keamanan ScholarPath.</p>
                 </div>
                 
                 <!-- Live feed toggle & AI Diagnostic -->
@@ -202,7 +232,7 @@ const exportCSV = () => {
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Run AI Diagnostic Check</span>
+                        <span>Jalankan Diagnostik AI</span>
                     </button>
 
                     <div class="flex items-center gap-2 bg-white border border-slate-100 rounded-xl px-4 py-2.5 shadow-sm">
@@ -227,7 +257,7 @@ const exportCSV = () => {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <!-- Date Range -->
                     <div class="space-y-1.5 text-left">
-                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400">Date Range</label>
+                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400">Rentang Tanggal</label>
                         <div class="relative">
                             <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
                                 📅
@@ -242,7 +272,7 @@ const exportCSV = () => {
 
                     <!-- Event Level Dropdown -->
                     <div class="space-y-1.5 text-left">
-                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400">Event Level</label>
+                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400">Tingkat Event</label>
                         <select
                             v-model="selectedLevel"
                             class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-700 font-bold focus:bg-white focus:border-purple-500 transition outline-none cursor-pointer"
@@ -257,7 +287,7 @@ const exportCSV = () => {
 
                     <!-- Category Dropdown -->
                     <div class="space-y-1.5 text-left">
-                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400">Category</label>
+                        <label class="text-[10px] font-black uppercase tracking-wider text-slate-400">Kategori</label>
                         <select
                             v-model="selectedCategory"
                             class="w-full px-4 py-2.5 bg-slate-50 border border-slate-150 rounded-xl text-xs text-slate-700 font-bold focus:bg-white focus:border-purple-500 transition outline-none cursor-pointer"
@@ -281,7 +311,7 @@ const exportCSV = () => {
                         <input
                             type="text"
                             v-model="searchQuery"
-                            placeholder="Search logs, actors, or events..."
+                            placeholder="Cari log, aktor, atau kejadian..."
                             class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-150 focus:bg-white focus:border-purple-500 rounded-xl text-xs text-slate-750 transition outline-none"
                         />
                     </div>
@@ -292,14 +322,14 @@ const exportCSV = () => {
                             @click="exportCSV"
                             class="px-5 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                         >
-                            Export CSV
+                            Ekspor CSV
                         </button>
                         <button
                             type="button"
                             @click="applyFilters"
                             class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
                         >
-                            Apply Filters
+                            Terapkan Filter
                         </button>
                     </div>
                 </div>
@@ -311,11 +341,11 @@ const exportCSV = () => {
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="border-b border-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                <th class="pb-3.5 font-bold">Timestamp</th>
-                                <th class="pb-3.5 font-bold">Level</th>
-                                <th class="pb-3.5 font-bold">Actor</th>
-                                <th class="pb-3.5 font-bold">Category</th>
-                                <th class="pb-3.5 font-bold">Message</th>
+                                <th class="pb-3.5 font-bold">Waktu</th>
+                                <th class="pb-3.5 font-bold">Tingkat</th>
+                                <th class="pb-3.5 font-bold">Aktor</th>
+                                <th class="pb-3.5 font-bold">Kategori</th>
+                                <th class="pb-3.5 font-bold">Pesan</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
@@ -372,7 +402,7 @@ const exportCSV = () => {
 
                 <!-- Pagination UI -->
                 <div class="pt-5 border-t border-slate-50 flex items-center justify-between text-xs font-bold text-slate-400">
-                    <span>Showing {{ paginatedLogs.length > 0 ? ((currentPage - 1) * itemsPerPage) + 1 : 0 }} to {{ ((currentPage - 1) * itemsPerPage) + paginatedLogs.length }} of {{ filteredLogs.length }} entries</span>
+                    <span>Menampilkan {{ paginatedLogs.length > 0 ? ((currentPage - 1) * itemsPerPage) + 1 : 0 }} sampai {{ ((currentPage - 1) * itemsPerPage) + paginatedLogs.length }} dari {{ filteredLogs.length }} entri</span>
                     <div class="flex items-center gap-1">
                         <button type="button" @click="prevPage" :disabled="currentPage === 1" class="h-7 w-7 rounded-lg bg-slate-50 text-slate-500 flex items-center justify-center border border-slate-100 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">&lt;</button>
                         <button type="button" class="h-7 w-7 rounded-lg bg-purple-600 text-white flex items-center justify-center transition">{{ currentPage }}</button>
@@ -388,12 +418,12 @@ const exportCSV = () => {
                     <div class="text-left space-y-1">
                         <span class="text-[9px] font-black uppercase tracking-wider transition-colors duration-300"
                             :class="hasCriticalEventInView ? 'text-red-500 animate-pulse' : 'text-slate-400'">
-                            Critical Events (24h)
+                            Kejadian Kritis (24j)
                             <span v-if="hasCriticalEventInView" class="ml-1 px-1 bg-red-100 text-red-600 rounded">⚠</span>
                         </span>
                         <div class="flex items-baseline gap-2">
                             <p class="text-2xl font-black transition-colors duration-300" :class="hasCriticalEventInView ? 'text-red-600' : 'text-slate-800'">12</p>
-                            <span class="text-[9px] font-bold bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100" :class="hasCriticalEventInView ? 'text-red-600 animate-pulse' : 'text-red-500'">+4% vs yesterday</span>
+                            <span class="text-[9px] font-bold bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100" :class="hasCriticalEventInView ? 'text-red-600 animate-pulse' : 'text-red-500'">+4% vs kemarin</span>
                         </div>
                     </div>
                     <span class="h-9 w-9 bg-red-50 text-red-650 rounded-xl flex items-center justify-center font-bold text-lg" :class="{'animate-bounce': hasCriticalEventInView}">!</span>
@@ -402,10 +432,10 @@ const exportCSV = () => {
                 <!-- Security Threats -->
                 <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between group hover:bg-red-500/10 transition duration-300 cursor-pointer">
                     <div class="text-left space-y-1">
-                        <span class="text-[9px] font-black uppercase text-slate-400 group-hover:text-red-500 tracking-wider transition duration-300">Security Threats</span>
+                        <span class="text-[9px] font-black uppercase text-slate-400 group-hover:text-red-500 tracking-wider transition duration-300">Ancaman Keamanan</span>
                         <div class="flex items-baseline gap-2">
                             <p class="text-2xl font-black text-slate-800 group-hover:text-red-700 transition duration-300">3</p>
-                            <span class="text-[9px] font-bold text-emerald-600 group-hover:text-red-600 bg-emerald-50 group-hover:bg-red-50 px-1.5 py-0.5 rounded-full border border-emerald-100 group-hover:border-red-200 transition duration-300">-20% vs yesterday</span>
+                            <span class="text-[9px] font-bold text-emerald-600 group-hover:text-red-600 bg-emerald-50 group-hover:bg-red-50 px-1.5 py-0.5 rounded-full border border-emerald-100 group-hover:border-red-200 transition duration-300">-20% vs kemarin</span>
                         </div>
                     </div>
                     <span class="h-9 w-9 bg-indigo-50 group-hover:bg-red-100 text-indigo-650 group-hover:text-red-600 rounded-xl flex items-center justify-center text-sm transition duration-300">🛡</span>
@@ -414,10 +444,10 @@ const exportCSV = () => {
                 <!-- System Uptime -->
                 <div class="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm flex items-center justify-between cursor-default">
                     <div class="text-left space-y-1">
-                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">System Uptime</span>
+                        <span class="text-[9px] font-black uppercase text-slate-400 tracking-wider">Uptime Sistem</span>
                         <div class="flex items-baseline gap-2 mt-1">
                             <p class="text-2xl font-black text-emerald-600">99.98%</p>
-                            <span class="px-2 py-0.5 text-[9px] font-black bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">Stable</span>
+                            <span class="px-2 py-0.5 text-[9px] font-black bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">Stabil</span>
                         </div>
                     </div>
                     <span class="h-9 w-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-sm">⏱</span>

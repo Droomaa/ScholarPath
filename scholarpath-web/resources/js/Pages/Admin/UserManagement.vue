@@ -56,7 +56,7 @@ onMounted(async () => {
         if (res.data?.data?.length) {
             rawUsers.value = res.data.data.map(u => ({
                 ...u,
-                last_login: fmtDate(now),
+                last_login: u.last_login ? fmtDate(new Date(u.last_login)) : fmtDate(now),
                 is_suspended: u.is_suspended || false
             }));
         }
@@ -87,12 +87,20 @@ const openVerifyModal = (u) => {
     pendingVerifyUser.value = u;
     showVerifyModal.value = true;
 };
-const confirmVerify = () => {
+const confirmVerify = async () => {
     if (!pendingVerifyUser.value) return;
-    pendingVerifyUser.value.is_verified = true;
-    showToast(`Akun "${pendingVerifyUser.value.name}" berhasil diverifikasi!`, 'success');
-    showVerifyModal.value = false;
-    pendingVerifyUser.value = null;
+    const token = getAuthToken();
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        await axios.put(`${backendUrl}/admin/users/${pendingVerifyUser.value.id}/verify`, {}, { headers: { Authorization: `Bearer ${token}` } });
+        pendingVerifyUser.value.is_verified = true;
+        showToast(`Akun "${pendingVerifyUser.value.name}" berhasil diverifikasi!`, 'success');
+    } catch (e) {
+        showToast('Gagal memverifikasi akun pengguna', 'error');
+    } finally {
+        showVerifyModal.value = false;
+        pendingVerifyUser.value = null;
+    }
 };
 
 // ---- WARN / NOTIFICATION ----
@@ -125,12 +133,19 @@ const handleSendNotification = async () => {
 };
 
 // ---- SUSPEND / UNSUSPEND (Toggle) ----
-const handleSuspendToggle = (u) => {
+const handleSuspendToggle = async (u) => {
     if (u.is_suspended) {
         // Unban
-        u.is_suspended = false;
-        u.is_verified = true;
-        showToast(`Akun "${u.name}" berhasil dipulihkan aksesnya!`, 'success');
+        const token = getAuthToken();
+        try {
+            const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+            await axios.put(`${backendUrl}/admin/users/${u.id}/unsuspend`, {}, { headers: { Authorization: `Bearer ${token}` } });
+            u.is_suspended = false;
+            u.is_verified = true;
+            showToast(`Akun "${u.name}" berhasil dipulihkan aksesnya!`, 'success');
+        } catch (e) {
+            showToast('Gagal memulihkan akun pengguna', 'error');
+        }
     } else {
         // Open suspend modal
         pendingSuspendUser.value = u;
@@ -145,14 +160,22 @@ const submitSuspend = () => {
     showSuspendConfirm.value = true;
 };
 
-const confirmSuspend = () => {
+const confirmSuspend = async () => {
     if (!pendingSuspendUser.value) return;
-    pendingSuspendUser.value.is_suspended = true;
-    pendingSuspendUser.value.is_verified = false;
-    showToast(`Akun "${pendingSuspendUser.value.name}" berhasil ditangguhkan!`, 'success');
-    showSuspendModal.value = false;
-    showSuspendConfirm.value = false;
-    pendingSuspendUser.value = null;
+    const token = getAuthToken();
+    try {
+        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
+        await axios.put(`${backendUrl}/admin/users/${pendingSuspendUser.value.id}/suspend`, { reason: suspendReason.value }, { headers: { Authorization: `Bearer ${token}` } });
+        pendingSuspendUser.value.is_suspended = true;
+        pendingSuspendUser.value.is_verified = false;
+        showToast(`Akun "${pendingSuspendUser.value.name}" berhasil ditangguhkan!`, 'success');
+    } catch (e) {
+        showToast('Gagal menangguhkan akun pengguna', 'error');
+    } finally {
+        showSuspendModal.value = false;
+        showSuspendConfirm.value = false;
+        pendingSuspendUser.value = null;
+    }
 };
 
 // ---- EXPORT CSV ----
@@ -175,7 +198,7 @@ const exportCSV = () => {
 </script>
 
 <template>
-    <Head title="User Management" />
+    <Head title="Manajemen Pengguna" />
 
     <AdminLayout>
         <!-- Toast -->
@@ -191,7 +214,7 @@ const exportCSV = () => {
             <!-- Header + Quick Counters -->
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div class="space-y-1 max-w-xl">
-                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">User Management</h1>
+                    <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Manajemen Pengguna</h1>
                     <p class="text-sm font-medium text-slate-500 leading-relaxed">Monitor, verifikasi, dan kelola akses pengguna di ekosistem ScholarPath.</p>
                 </div>
                 <div class="flex gap-4">
@@ -219,18 +242,17 @@ const exportCSV = () => {
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
                         <div class="flex rounded-xl bg-slate-100 p-1">
-                            <button v-for="tab in ['All Users', 'Students', 'Institutions']" :key="tab" type="button"
-                                @click="activeRoleFilter = tab === 'All Users' ? 'All' : (tab === 'Students' ? 'Student' : 'Institution')"
+                            <button v-for="tab in [{ key: 'All', label: 'Semua Pengguna' }, { key: 'Student', label: 'Siswa' }, { key: 'Institution', label: 'Instansi' }]" :key="tab.key" type="button"
+                                @click="activeRoleFilter = tab.key"
                                 class="px-4 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
-                                :class="(activeRoleFilter === 'All' && tab === 'All Users') || (activeRoleFilter === 'Student' && tab === 'Students') || (activeRoleFilter === 'Institution' && tab === 'Institutions')
-                                    ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'">
-                                {{ tab }}
+                                :class="activeRoleFilter === tab.key ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'">
+                                {{ tab.label }}
                             </button>
                         </div>
                         <button type="button" @click="exportCSV"
                             class="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer">
                             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                            Export CSV
+                            Ekspor CSV
                         </button>
                     </div>
                 </div>
@@ -240,11 +262,11 @@ const exportCSV = () => {
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="border-b border-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                <th class="pb-3.5 font-bold">User Identity</th>
-                                <th class="pb-3.5 font-bold">Role</th>
-                                <th class="pb-3.5 font-bold">Verification Status</th>
-                                <th class="pb-3.5 font-bold">Activity</th>
-                                <th class="pb-3.5 font-bold text-right">Actions</th>
+                                <th class="pb-3.5 font-bold">Identitas Pengguna</th>
+                                <th class="pb-3.5 font-bold">Peran</th>
+                                <th class="pb-3.5 font-bold">Status Verifikasi</th>
+                                <th class="pb-3.5 font-bold">Aktivitas</th>
+                                <th class="pb-3.5 font-bold text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-50">
@@ -272,24 +294,24 @@ const exportCSV = () => {
                                 <td class="py-4">
                                     <span class="px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-md border"
                                         :class="u.role === 'instansi' ? 'bg-purple-50/50 text-purple-700 border-purple-100' : 'bg-indigo-50/50 text-indigo-700 border-indigo-100'">
-                                        {{ u.role === 'instansi' ? 'Institution' : 'Student' }}
+                                        {{ u.role === 'instansi' ? 'Instansi' : 'Siswa' }}
                                     </span>
                                 </td>
                                 <!-- Verification Status -->
                                 <td class="py-4">
                                     <span v-if="u.is_suspended" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">
-                                        <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span> Banned
+                                        <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span> Ditangguhkan
                                     </span>
                                     <span v-else-if="u.role === 'instansi' && !u.is_verified" class="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
-                                        <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Pending Review
+                                        <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Menunggu Peninjauan
                                     </span>
                                     <span v-else class="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Verified
+                                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Terverifikasi
                                     </span>
                                 </td>
                                 <!-- Activity -->
                                 <td class="py-4 text-xs font-semibold text-slate-450">
-                                    Last Login: {{ u.last_login }}
+                                    Login Terakhir: {{ u.last_login }}
                                 </td>
                                 <!-- Actions -->
                                 <td class="py-4 text-right">
@@ -298,7 +320,7 @@ const exportCSV = () => {
                                         <button v-if="u.role === 'instansi' && !u.is_verified && !u.is_suspended"
                                             type="button" @click="openVerifyModal(u)"
                                             class="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition cursor-pointer">
-                                            Verify
+                                            Verifikasi
                                         </button>
 
                                         <!-- Warning Notification -->
@@ -327,7 +349,7 @@ const exportCSV = () => {
 
                 <!-- Pagination (static) -->
                 <div class="pt-5 border-t border-slate-50 flex items-center justify-between text-xs font-bold text-slate-400">
-                    <span>Showing {{ filteredUsers.length }} of {{ rawUsers.length }} users</span>
+                    <span>Menampilkan {{ filteredUsers.length }} dari {{ rawUsers.length }} pengguna</span>
                     <div class="flex items-center gap-1">
                         <button class="h-7 w-7 rounded-lg bg-slate-50 text-slate-500 flex items-center justify-center border border-slate-100 hover:bg-slate-100 transition cursor-pointer">&lt;</button>
                         <button class="h-7 w-7 rounded-lg bg-purple-600 text-white flex items-center justify-center transition">1</button>

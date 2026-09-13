@@ -66,7 +66,14 @@ func GetAIRecommendation(c *gin.Context) {
 		}
 
 		reqBody, _ := json.Marshal(aiReq)
-		resp, err := http.Post("http://localhost:8001/api/match", "application/json", bytes.NewBuffer(reqBody))
+		var resp *http.Response
+		var err error
+
+		// Coba port 8000 terlebih dahulu (port standar uvicorn main:app), lalu fallback ke 8001
+		resp, err = http.Post("http://localhost:8000/api/match", "application/json", bytes.NewBuffer(reqBody))
+		if err != nil {
+			resp, err = http.Post("http://localhost:8001/api/match", "application/json", bytes.NewBuffer(reqBody))
+		}
 		
 		if err == nil {
 			body, _ := io.ReadAll(resp.Body)

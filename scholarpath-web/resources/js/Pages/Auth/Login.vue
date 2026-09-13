@@ -248,14 +248,14 @@ const handleGoogleLoginCallback = async (response) => {
         </div>
 
         <!-- Role Tabs Toggle -->
-        <div class="mb-6 flex rounded-2xl bg-slate-100 p-1.5 shadow-inner">
+        <div class="mb-6 flex rounded-2xl bg-slate-100 dark:bg-slate-800 p-1.5 shadow-inner">
             <button
                 type="button"
                 @click="setLoginRole('siswa')"
                 class="w-1/2 rounded-xl py-2.5 text-center text-xs font-bold transition-all duration-200 focus:outline-none cursor-pointer"
                 :class="loginRole === 'siswa' 
-                    ? 'bg-white text-indigo-600 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-800'"
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
             >
                 Siswa
             </button>
@@ -264,8 +264,8 @@ const handleGoogleLoginCallback = async (response) => {
                 @click="setLoginRole('instansi')"
                 class="w-1/2 rounded-xl py-2.5 text-center text-xs font-bold transition-all duration-200 focus:outline-none cursor-pointer"
                 :class="loginRole === 'instansi' 
-                    ? 'bg-white text-indigo-600 shadow-sm' 
-                    : 'text-slate-500 hover:text-slate-800'"
+                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' 
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
             >
                 Instansi
             </button>
@@ -302,7 +302,7 @@ const handleGoogleLoginCallback = async (response) => {
                         autofocus
                         autocomplete="username"
                         placeholder="nama@email.com"
-                        class="block w-full pl-11 pr-4 py-3 bg-slate-50/50 hover:bg-slate-100/70 focus:bg-white border border-slate-200/80 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-indigo-500/5 transition duration-200 outline-none"
+                        class="block w-full pl-11 pr-4 py-3 bg-slate-50/50 dark:bg-slate-800/60 hover:bg-slate-100/70 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200/80 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:ring-4 focus:ring-indigo-500/5 transition duration-200 outline-none"
                     />
                 </div>
                 <InputError class="mt-1.5" :message="form.errors.email" />
@@ -333,7 +333,7 @@ const handleGoogleLoginCallback = async (response) => {
                         required
                         autocomplete="current-password"
                         placeholder="••••••••"
-                        class="block w-full pl-11 pr-11 py-3 bg-slate-50/50 hover:bg-slate-100/70 focus:bg-white border border-slate-200/80 focus:border-indigo-500 rounded-2xl text-xs text-slate-800 placeholder-slate-400 focus:ring-4 focus:ring-indigo-500/5 transition duration-200 outline-none"
+                        class="block w-full pl-11 pr-11 py-3 bg-slate-50/50 dark:bg-slate-800/60 hover:bg-slate-100/70 dark:hover:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 border border-slate-200/80 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-500 rounded-2xl text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:ring-4 focus:ring-indigo-500/5 transition duration-200 outline-none"
                     />
                     <button
                         type="button"
@@ -358,9 +358,9 @@ const handleGoogleLoginCallback = async (response) => {
                     id="remember"
                     type="checkbox"
                     v-model="form.remember"
-                    class="h-4.5 w-4.5 text-indigo-600 focus:ring-indigo-500/20 border-slate-300 rounded-lg transition duration-200"
+                    class="h-4 w-4 text-indigo-600 focus:ring-indigo-500/20 border-slate-300 dark:border-slate-600 rounded-lg transition duration-200"
                 />
-                <label for="remember" class="ml-2.5 text-xs font-bold text-slate-500 select-none cursor-pointer">
+                <label for="remember" class="ml-2.5 text-xs font-bold text-slate-500 dark:text-slate-400 select-none cursor-pointer">
                     Ingat saya
                 </label>
             </div>
@@ -392,7 +392,7 @@ const handleGoogleLoginCallback = async (response) => {
                 <button
                     type="button"
                     @click="loginWithGoogle"
-                    class="w-full flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 font-bold py-3 text-xs text-slate-700 transition duration-200 focus:outline-none cursor-pointer"
+                    class="w-full flex items-center justify-center gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 font-bold py-3 text-xs text-slate-700 dark:text-slate-200 transition duration-200 focus:outline-none cursor-pointer"
                 >
                     <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none">
                         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

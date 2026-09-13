@@ -17,6 +17,7 @@ type RiwayatPendaftaran struct {
 	ProgramTitle  string    `json:"program_title"`
 	StatusName    string    `json:"status_name"`
 	TanggalDaftar time.Time `json:"tanggal_daftar"`
+	Alasan        string    `json:"alasan"`
 }
 type ApplicantDetail struct {
 	PendaftaranID uint      `json:"pendaftaran_id"`
@@ -353,7 +354,8 @@ func GetRiwayatPendaftaranSiswa(c *gin.Context) {
 				WHEN p.status_id = 4 THEN 'Rejected'
 				ELSE 'Pending'
 			END as status_name,
-			p.tanggal_daftar
+			p.tanggal_daftar,
+			p.alasan
 		FROM pendaftarans p
 		LEFT JOIN beasiswas b ON p.beasiswa_id = b.id
 		LEFT JOIN olimpiades o ON p.olimpiade_id = o.id

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -264,27 +265,50 @@ func GetAdminStats(c *gin.Context) {
 		return
 	}
 
-	var totalUsers int64
-	koneksi.DB.Model(&models.User{}).Count(&totalUsers)
+	var totalStudents int64
+	koneksi.DB.Model(&models.User{}).Where("role = ?", "student").Count(&totalStudents)
 
-	var pendingVerifications int64
-	koneksi.DB.Model(&models.Instansi{}).Where("is_verified = ?", false).Count(&pendingVerifications)
+	var totalInstansi int64
+	koneksi.DB.Model(&models.Instansi{}).Where("is_verified = ?", true).Count(&totalInstansi)
 
-	// We can also count pending beasiswa / olimpiade verifications
+	var pendingInstansi int64
+	koneksi.DB.Model(&models.Instansi{}).Where("is_verified = ?", false).Count(&pendingInstansi)
+
 	var pendingBeasiswas int64
 	koneksi.DB.Model(&models.Beasiswa{}).Where("verified_by IS NULL").Count(&pendingBeasiswas)
 
 	var pendingOlimpiades int64
 	koneksi.DB.Model(&models.Olimpiade{}).Where("verified_by IS NULL").Count(&pendingOlimpiades)
 
-	// Combine to pending verifications queue count
-	totalPendingQueue := pendingVerifications + pendingBeasiswas + pendingOlimpiades
+	pendingContent := pendingBeasiswas + pendingOlimpiades
+
+	var trendStudents []int64
+	var trendInstitutions []int64
+
+	today := time.Now()
+	for i := 6; i >= 0; i-- {
+		targetDate := today.AddDate(0, 0, -i)
+		startOfDay := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, targetDate.Location())
+		endOfDay := startOfDay.AddDate(0, 0, 1)
+
+		var countStudents int64
+		koneksi.DB.Model(&models.User{}).Where("role = ? AND created_at >= ? AND created_at < ?", "student", startOfDay, endOfDay).Count(&countStudents)
+		trendStudents = append(trendStudents, countStudents)
+
+		var countInstansi int64
+		koneksi.DB.Model(&models.Instansi{}).Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).Count(&countInstansi)
+		trendInstitutions = append(trendInstitutions, countInstansi)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"total_users":          totalUsers,
-		"pending_verify":       pendingVerifications,
-		"pending_queue_count":  totalPendingQueue,
-		"reported_content":    18, // Mocked as static or count of flags
+		"data": gin.H{
+			"total_students":      totalStudents,
+			"total_instansi":      totalInstansi,
+			"pending_content":     pendingContent,
+			"pending_institution": pendingInstansi,
+			"trend_students":      trendStudents,
+			"trend_institutions":  trendInstitutions,
+		},
 	})
 }
 

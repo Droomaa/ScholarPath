@@ -36,7 +36,8 @@ const fetchApplicants = async () => {
         // Try new dedicated endpoint first
         try {
             const response = await axios.get(`${backendUrl}/instansi/applicants`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 5000
             });
             listApplicants.value = response.data.data || [];
             return;
@@ -46,7 +47,8 @@ const fetchApplicants = async () => {
 
         // Fallback to legacy endpoint
         const response = await axios.get(`${backendUrl}/instansi/pendaftaran`, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 5000
         });
         listApplicants.value = response.data.data || [];
     } catch (e) {
@@ -258,14 +260,14 @@ onMounted(() => {
     <AuthenticatedLayout>
         <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-xs font-bold transition-all duration-300 animate-slideDown"
+            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-xs font-bold transition-all duration-300 animate-slideDown text-white"
                 :class="{
-                    'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60': messageToast.type === 'success',
-                    'bg-red-50 dark:bg-red-900/40 text-red-800 dark:text-red-400 border-red-100 dark:border-red-800/60': messageToast.type === 'error'
+                    'bg-emerald-500': messageToast.type === 'success',
+                    'bg-red-500': messageToast.type === 'error'
                 }"
             >
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 dark:bg-emerald-600 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
-                <span v-else class="h-5 w-5 bg-red-500 dark:bg-red-600 text-white rounded-full flex items-center justify-center text-[10px]">×</span>
+                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-[10px]">✓</span>
+                <span v-else class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-[10px]">×</span>
                 {{ messageToast.text }}
             </div>
         </transition>
@@ -275,7 +277,7 @@ onMounted(() => {
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left">
                 <div class="space-y-1">
                     <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Manajemen Pelamar</h1>
-                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Review and manage student applications with AI-powered match scoring.</p>
+                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Tinjau dan kelola pendaftaran siswa dengan penilaian kesesuaian bertenaga AI.</p>
                 </div>
             </div>
 
@@ -349,7 +351,7 @@ onMounted(() => {
                                 class="px-3 py-1.5 rounded-md text-[10px] font-black transition-all focus:outline-none cursor-pointer"
                                 :class="filterType === tab ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
                             >
-                                {{ tab }}
+                                {{ tab === 'All' ? 'Semua' : tab }}
                             </button>
                         </div>
 
@@ -358,9 +360,9 @@ onMounted(() => {
                             v-model="sortBy"
                             class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-300 px-3 py-2 rounded-xl focus:outline-none cursor-pointer outline-none"
                         >
-                            <option value="high_match">Sort: High Match</option>
-                            <option value="newest">Sort: Newest</option>
-                            <option value="low_match">Sort: Lowest Match</option>
+                            <option value="high_match">Urutkan: Kesesuaian Tinggi</option>
+                            <option value="newest">Urutkan: Terbaru</option>
+                            <option value="low_match">Urutkan: Kesesuaian Rendah</option>
                         </select>
                     </div>
                 </div>

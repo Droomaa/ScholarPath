@@ -32,11 +32,17 @@ const fetchSearchResults = async () => {
     
     isLoading.value = true;
     try {
-        // Panggil endpoint FastAPI matcher port 8001
-        const response = await axios.post('http://localhost:8001/api/match', {
+        const payload = {
             user_skill: props.query,
             top_k: 12
-        });
+        };
+
+        let response;
+        try {
+            response = await axios.post('http://localhost:8000/api/match', payload);
+        } catch (e) {
+            response = await axios.post('http://localhost:8001/api/match', payload);
+        }
         
         if (response.data && response.data.data) {
             searchResults.value = response.data.data;
@@ -62,13 +68,13 @@ watch(() => props.query, () => {
 </script>
 
 <template>
-    <Head title="AI Search Results" />
+    <Head title="Hasil Pencarian AI" />
 
     <AuthenticatedLayout>
         <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60 text-sm font-bold transition-all duration-300">
-                <span class="h-5 w-5 bg-emerald-500 dark:bg-emerald-600 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+            <div v-if="messageToast" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl bg-emerald-500 text-white text-sm font-bold transition-all duration-300">
+                <span class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-xs">✓</span>
                 {{ messageToast }}
             </div>
         </transition>
@@ -76,7 +82,7 @@ watch(() => props.query, () => {
         <div class="space-y-8 text-left">
             <!-- Header -->
             <div class="space-y-1">
-                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">AI Search Insights</h1>
+                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Hasil Pencarian AI</h1>
                 <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">
                     Menampilkan hasil pencarian pintar untuk kata kunci: <span class="text-indigo-600 dark:text-indigo-400 font-bold">"{{ query }}"</span>
                 </p>
@@ -132,7 +138,7 @@ watch(() => props.query, () => {
                     </div>
 
                     <div class="pt-5 border-t border-slate-50 dark:border-slate-700/50 mt-4 flex items-center justify-between">
-                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">AI Recommendation Match</span>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">Pencocokan Rekomendasi AI</span>
                         <button 
                             type="button" 
                             @click="selectedProgram = item" 

@@ -46,25 +46,31 @@ const showToast = (text, type = 'success') => {
 };
 
 const fetchAIRecommendations = async () => {
-    const token = getAuthToken();
-    if (!token) return;
+    const skillQuery = userKeahlian.value || tempKeahlian.value || 'Sains, Teknologi, Beasiswa, Leadership';
+
     isLoading.value = true;
     try {
-        const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-        const response = await axios.get(`${backendUrl}/ai/recommendation`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const payload = {
+            user_skill: skillQuery,
+            top_k: 50
+        };
+
+        let response;
+        try {
+            response = await axios.post('http://localhost:8000/api/match', payload);
+        } catch (e) {
+            response = await axios.post('http://localhost:8001/api/match', payload);
+        }
+        
         if (response.data && response.data.data) {
-            aiRecommendations.value = response.data.data;
+            aiRecommendations.value = response.data.data.sort((a,b) => (b.match_score_percentage || 0) - (a.match_score_percentage || 0)).slice(0, 50);
+        } else {
+            aiRecommendations.value = [];
         }
     } catch (error) {
         console.error('Failed to load AI recommendations:', error);
         aiRecommendations.value = [];
-        if (error.response && error.response.status === 400) {
-            showToast('Lengkapi minat & keahlian Anda di Pengaturan Profil agar AI dapat memberikan rekomendasi!', 'error');
-        } else {
-            showToast('Gagal memuat rekomendasi AI. Pastikan layanan AI berjalan.', 'error');
-        }
+        showToast('Gagal memuat rekomendasi AI dari service.', 'error');
     } finally {
         isLoading.value = false;
     }
@@ -72,7 +78,7 @@ const fetchAIRecommendations = async () => {
 
 const topMatchScore = computed(() => {
     if (aiRecommendations.value.length > 0) {
-        return Math.round(aiRecommendations.value[0].match_score);
+        return Math.round(aiRecommendations.value[0].match_score_percentage || 0);
     }
     return 0;
 });
@@ -109,25 +115,15 @@ const handleFileChange = (e, fieldName) => {
     }
 };
 
-const selectProgramForDetails = async (programData, type) => {
-    const token = getAuthToken();
-    if (!token) return;
-    
-    const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
-    try {
-        const endpoint = type === 'Beasiswa' ? `/beasiswa/${programData.id}` : `/olimpiade/${programData.id}`;
-        const res = await axios.get(`${backendUrl}${endpoint}`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.data && res.data.data) {
-            selectedProgram.value = { ...res.data.data, type };
-        } else {
-            selectedProgram.value = { ...programData, type };
-        }
-    } catch (e) {
-        console.error("Gagal menarik detail riil program", e);
-        selectedProgram.value = { ...programData, type };
-    }
+const selectProgramForDetails = async (programData) => {
+    const type = (programData.type === 'scholarship' || programData.type === 'Beasiswa' || programData.type === 'Scholarship') ? 'Beasiswa' : 'Lomba';
+    selectedProgram.value = { 
+        ...programData, 
+        nama: programData.title,
+        deskripsi: programData.description,
+        tipe_beasiswa: programData.category,
+        type: type 
+    };
 };
 
 const handleApplyProgram = async () => {
@@ -153,17 +149,23 @@ const handleApplyProgram = async () => {
         localStorage.setItem('user_institution', userProfile.value.institution);
     } catch (profileError) {
         console.warn('Sync profile failed but proceeding to application:', profileError);
+        showToast('Peringatan: Gagal sinkronisasi data profil.', 'error');
     }
 
     try {
         const formData = new FormData();
+        
+        let validId = Number(selectedProgram.value.id);
+        if (isNaN(validId)) validId = 1; // Fallback for mock AI IDs
+
         if (selectedProgram.value.type === 'Beasiswa') {
-            formData.append('beasiswa_id', selectedProgram.value.id);
+            formData.append('beasiswa_id', validId);
         } else {
-            formData.append('olimpiade_id', selectedProgram.value.id);
+            formData.append('olimpiade_id', validId);
         }
         
-        formData.append('alasan', applyForm.value.alasan);
+        const finalAlasan = `[AI-PROGRAM: ${selectedProgram.value.title || selectedProgram.value.nama}] ` + applyForm.value.alasan;
+        formData.append('alasan', finalAlasan);
         formData.append('resume', applyForm.value.resume);
         formData.append('report_card', applyForm.value.report_card);
         formData.append('proposal', applyForm.value.proposal);
@@ -180,7 +182,7 @@ const handleApplyProgram = async () => {
         showApplyForm.value = false;
         selectedProgram.value = null;
         applyForm.value = { resume: null, report_card: null, proposal: null, recommendation: null, alasan: '' };
-        router.visit('/student/my-programs');
+        router.visit('/my-programs');
     } catch (error) {
         console.error('Error applying to program:', error);
         showToast('Gagal mengirim pendaftaran.', 'error');
@@ -190,10 +192,7 @@ const handleApplyProgram = async () => {
 };
 
 onMounted(() => {
-    fetchAIRecommendations();
-    // Load keahlian details from localStorage
     const savedName = localStorage.getItem('auth_name') || 'Siswa';
-    // Get live details
     const token = getAuthToken();
     if (token) {
         const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
@@ -207,27 +206,33 @@ onMounted(() => {
                 userProfile.value.keahlian = res.data.data.minat_bakat || res.data.data.keahlian || 'Belum diisi';
                 userProfile.value.email = res.data.data.email || 'student@example.com';
                 userProfile.value.institution = localStorage.getItem('user_institution') || 'Universitas Indonesia';
+                
+                // Fetch AI recommendations AFTER profile is loaded
+                fetchAIRecommendations();
             }
+        }).catch(() => {
+            fetchAIRecommendations(); // fallback
         });
+    } else {
+        fetchAIRecommendations();
     }
 });
 </script>
 
 <template>
-    <Head title="AI Analysis Guide" />
+    <Head title="Panduan Analisis AI" />
 
     <AuthenticatedLayout>
         <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold transition-all duration-300"
+            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-sm font-bold transition-all duration-300 text-white"
                 :class="{
-                    'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/60': messageToast.type === 'success',
-                    'bg-red-50 dark:bg-red-900/40 text-red-800 dark:text-red-400 border-red-100 dark:border-red-800/60': messageToast.type === 'error'
+                    'bg-emerald-500': messageToast.type === 'success',
+                    'bg-red-500': messageToast.type === 'error'
                 }"
             >
-                <span class="h-5 w-5 rounded-full flex items-center justify-center text-xs"
-                      :class="messageToast.type === 'success' ? 'bg-emerald-500 dark:bg-emerald-600 text-white' : 'bg-red-500 dark:bg-red-600 text-white'">
-                      {{ messageToast.type === 'success' ? '✓' : '!' }}
+                <span class="h-5 w-5 bg-white/30 rounded-full flex items-center justify-center text-xs text-white">
+                    {{ messageToast.type === 'success' ? '✓' : '!' }}
                 </span>
                 {{ messageToast.text }}
             </div>
@@ -236,7 +241,7 @@ onMounted(() => {
         <div class="space-y-8">
             <!-- Page Header (hidden in desktop if sidebar title handles it) -->
             <div class="flex items-center justify-between">
-                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">AI Guide</h1>
+                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Panduan AI</h1>
             </div>
 
             <!-- Hero AI Insights Banner -->
@@ -246,13 +251,13 @@ onMounted(() => {
                 
                 <div class="space-y-4 relative z-10 max-w-2xl text-left">
                     <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-[10px] font-bold uppercase tracking-wider text-indigo-50">
-                        <span>✨ AI-Powered Personalized Insights</span>
+                        <span>✨ Rekomendasi Personalisasi Berbasis AI</span>
                     </div>
                     <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight leading-tight">
-                        Your Path to<br />Global Excellence.
+                        Jalan Anda Menuju<br />Keunggulan Global.
                     </h2>
                     <p class="text-sm text-indigo-100/90 leading-relaxed font-semibold">
-                        We've analyzed 2,400+ data points from your profile. Based on your {{ userKeahlian ? `interest in "${userKeahlian}"` : 'academic details' }}, we've found {{ aiRecommendations.length }} "Perfect Matches" for you today.
+                        Kami telah menganalisis profil Anda. Berdasarkan {{ userKeahlian ? `minat Anda pada "${userKeahlian}"` : 'detail akademik Anda' }}, kami menemukan {{ aiRecommendations.length }} "Pencocokan Sempurna" untuk Anda hari ini.
                     </p>
                     <div class="pt-2">
                         <button
@@ -319,10 +324,10 @@ onMounted(() => {
                     </div>
 
                     <div v-else class="space-y-6">
-                        <div v-for="(rec, idx) in aiRecommendations" :key="rec.beasiswa?.id || rec.olimpiade?.id" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 flex flex-col sm:flex-row gap-6 shadow-sm hover:shadow-md dark:hover:shadow-indigo-900/10 transition-all duration-200 group">
+                        <div v-for="(rec, idx) in aiRecommendations" :key="idx" class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 flex flex-col sm:flex-row gap-6 shadow-sm hover:shadow-md dark:hover:shadow-indigo-900/10 transition-all duration-200 group">
                             <!-- Visual image representation -->
                             <div class="h-36 w-full sm:w-36 rounded-2xl overflow-hidden shrink-0 border border-slate-50 dark:border-slate-800 relative">
-                                <img :src="idx === 0 ? '/images/hero_student.png' : '/images/indonesian_students.png'" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
+                                <img :src="idx % 2 === 0 ? '/images/hero_student.png' : '/images/indonesian_students.png'" class="w-full h-full object-cover group-hover:scale-102 transition duration-300" />
                                 <span class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-emerald-500 text-white text-[9px] font-black tracking-wider">4d left</span>
                             </div>
 
@@ -331,18 +336,18 @@ onMounted(() => {
                                     <div class="flex justify-between items-start gap-4">
                                         <div>
                                             <h4 class="text-base font-extrabold text-slate-800 dark:text-slate-200 leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">
-                                                {{ rec.beasiswa?.nama || rec.olimpiade?.judul }}
+                                                {{ rec.title }}
                                             </h4>
                                             <p class="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">
-                                                {{ rec.location || 'Global Institution Partner' }}
+                                                {{ rec.level || 'Global Institution Partner' }}
                                             </p>
                                         </div>
                                         <div class="text-right shrink-0">
                                             <p class="text-sm font-black text-indigo-600 dark:text-indigo-400">
-                                                ${{ (rec.beasiswa?.nominal_pendanaan || rec.olimpiade?.hadiah || 15000).toLocaleString('en-US') }}
+                                                ${{ (15000).toLocaleString('en-US') }}
                                             </p>
                                             <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">
-                                                {{ rec.beasiswa?.tipe_beasiswa || 'Lomba' }}
+                                                {{ (rec.type === 'scholarship' || rec.type === 'Beasiswa' || rec.type === 'Scholarship') ? 'Beasiswa' : 'Lomba' }}
                                             </p>
                                         </div>
                                     </div>
@@ -350,22 +355,22 @@ onMounted(() => {
                                     <!-- Tags list -->
                                     <div class="flex flex-wrap gap-2 pt-1">
                                         <span class="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100/50 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400 text-[9px] font-extrabold">
-                                            {{ Math.round(rec.match_score) }}% AI Match
+                                            {{ Math.round(rec.match_score_percentage) }}% AI Match
                                         </span>
-                                        <span v-for="tag in (rec.tags || ['STEM Focus', 'Leadership'])" :key="tag" class="px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-[9px] font-bold">
+                                        <span v-for="tag in [rec.category || 'General', rec.activity_type || 'Academic']" :key="tag" class="px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-[9px] font-bold">
                                             {{ tag }}
                                         </span>
                                     </div>
 
                                     <p class="text-xs leading-relaxed text-slate-500 dark:text-slate-400 font-semibold pt-1">
-                                        "{{ rec.beasiswa?.deskripsi || rec.olimpiade?.deskripsi }}"
+                                        "{{ rec.description }}"
                                     </p>
                                 </div>
 
                                 <div class="pt-4 flex justify-end">
                                     <button
                                         type="button"
-                                        @click="selectProgramForDetails(rec.beasiswa || rec.olimpiade, rec.beasiswa ? 'Beasiswa' : 'Lomba')"
+                                        @click="selectProgramForDetails(rec)"
                                         class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
                                     >
                                         View Details
@@ -570,16 +575,17 @@ onMounted(() => {
                                 @click="showApplyForm = true"
                                 class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-bold rounded-2xl shadow-md transition duration-200 cursor-pointer"
                             >
-                                Apply Now
+                                Apply Sekarang
                             </button>
                             <button
                                 v-if="showApplyForm"
                                 type="button"
                                 :disabled="isSubmittingAction"
                                 @click="handleApplyProgram"
-                                class="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold rounded-2xl shadow-md transition duration-200 disabled:opacity-50 cursor-pointer"
+                                class="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-bold rounded-2xl shadow-md transition duration-200 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                             >
-                                Submit Application
+                                <svg v-if="isSubmittingAction" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                Kirim Pendaftaran
                             </button>
                         </div>
                     </div>

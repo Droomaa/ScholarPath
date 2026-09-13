@@ -32,6 +32,7 @@ const showToast = (text, type = 'success') => {
 const aiRecommendations = ref([]);
 const latestPrograms = ref([]);
 const activeTab = ref('All');
+const searchQuery = ref('');
 const isLoadingAI = ref(false);
 const isLoadingPrograms = ref(false);
 const errorAI = ref('');
@@ -39,7 +40,7 @@ const selectedLatestProgram = ref(null);
 const predefinedPills = {
     'Interest Field': ['STEM', 'Arts & Humanities', 'Business', 'Law & policy', 'Medicine', 'Social Sciences', 'Science'],
     'Technical Skills': ['Software development', 'Visual arts and UX', 'research and analysis'],
-    'Preferensi': ['Kompetisi', 'Beasiswa', 'Keduanya'],
+    'Preferensi': ['Kompetisi', 'Beasiswa'],
     'Wilayah Tujuan': ['Dalam negeri', 'Luar negeri'],
     'Program Goals': ['Funding', 'Challenges', 'Networking', 'Mentorship', 'Global Reach', 'Skill Growth'],
     'Career Aspirations': ['Research & academia', 'Industry Professional', 'Entrepreneurship', 'Public Service', 'Healthcare', 'Education', 'Engineering', 'Creative Industries', 'Technology', 'Finance', 'Environmental Science']
@@ -56,9 +57,25 @@ const allSelectedPills = computed(() => {
 const hasCompletedWizard = ref(localStorage.getItem('scholarpath_wizard_done') === 'true');
 
 const filteredPrograms = computed(() => {
-    if (activeTab.value === 'All') return latestPrograms.value;
-    if (activeTab.value === 'Beasiswa') return latestPrograms.value.filter(p => p.type === 'Beasiswa');
-    return latestPrograms.value.filter(p => p.type === 'Lomba' && p.category === activeTab.value);
+    let programs = latestPrograms.value;
+    
+    if (activeTab.value === 'Beasiswa') {
+        programs = programs.filter(p => p.type === 'Beasiswa');
+    } else if (activeTab.value !== 'All') {
+        programs = programs.filter(p => p.type === 'Lomba' && p.category === activeTab.value);
+    }
+    
+    if (searchQuery.value) {
+        const query = searchQuery.value.toLowerCase();
+        programs = programs.filter(p => 
+            (p.title && p.title.toLowerCase().includes(query)) ||
+            (p.description && p.description.toLowerCase().includes(query)) ||
+            (p.category && p.category.toLowerCase().includes(query)) ||
+            (p.type && p.type.toLowerCase().includes(query))
+        );
+    }
+    
+    return programs;
 });
 
 const nextStep = () => { 
@@ -93,20 +110,22 @@ const addCustomPill = () => {
 };
 
 const fetchAIRecommendations = async () => {
-    const skillText = allSelectedPills.value.join(', ');
-    if (!skillText && !customPillInput.value) {
-        aiRecommendations.value = [];
-        return;
+    let skillText = allSelectedPills.value.join(', ');
+    if (!skillText && customPillInput.value) {
+        skillText = customPillInput.value;
+    }
+    if (!skillText) {
+        skillText = user.value.keahlian || 'STEM, Software development, Beasiswa';
     }
     
     isLoadingAI.value = true;
     
     try {
         const token = getAuthToken();
-        if (token) {
+        if (token && (allSelectedPills.value.length > 0 || customPillInput.value)) {
             const beUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
             await axios.put(`${beUrl}/user/profile`, {
-                keahlian: skillText || customPillInput.value
+                keahlian: skillText
             }, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
         }
 
@@ -127,16 +146,23 @@ const fetchAIRecommendations = async () => {
             status: 'active'
         }));
 
-        const aiUrl = 'http://localhost:8001';
-        const response = await axios.post(`${aiUrl}/api/match`, {
-            user_skill: skillText || customPillInput.value,
+        const payload = {
+            user_skill: skillText,
             filter_type: filterType || undefined,
             top_k: 5,
             live_programs: livePrograms
-        });
+        };
+
+        let response;
+        try {
+            const aiUrl = import.meta.env.VITE_AI_URL || 'http://localhost:8001';
+            response = await axios.post(`${aiUrl}/api/match`, payload);
+        } catch (e) {
+            response = null;
+        }
         
-        if (response.data && response.data.data && response.data.data.length > 0) {
-            aiRecommendations.value = response.data.data.sort((a,b) => b.match_score_percentage - a.match_score_percentage).slice(0, 5);
+        if (response && response.data && response.data.data && response.data.data.length > 0) {
+            aiRecommendations.value = response.data.data.sort((a,b) => (b.match_score_percentage || 0) - (a.match_score_percentage || 0)).slice(0, 5);
         } else {
             aiRecommendations.value = [];
         }
@@ -146,6 +172,18 @@ const fetchAIRecommendations = async () => {
     } finally {
         isLoadingAI.value = false;
     }
+};
+
+const calculateDaysLeft = (deadline) => {
+    if (!deadline) return '-';
+    const dlDate = new Date(deadline);
+    const now = new Date();
+    const diffTime = dlDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) return `${diffDays} hari tersisa`;
+    if (diffDays === 0) return 'Hari ini terakhir';
+    return 'Telah berakhir';
 };
 
 const fetchStudentDashboard = async () => {
@@ -173,17 +211,15 @@ const fetchStudentDashboard = async () => {
             }
         }
 
-        const mB = (resB.data.data || [])
-            .filter(b => b.status === 'active' || b.status === 'approved')
+        const mB = (resB?.data?.data || [])
             .map(b => ({
                 id: b.id, title: b.nama, type: 'Beasiswa', category: 'Beasiswa', description: b.deskripsi, link: b.link_informasi,
-                detailLabel: `Kuota: ${b.kuota_pendaftar}`, daysLeft: '12 hari tersisa', image: '/images/hero_student.png'
+                detailLabel: `Kuota: ${b.kuota_pendaftar}`, daysLeft: calculateDaysLeft(b.deadline), image: '/images/hero_student.png'
             }));
-        const mO = (resO.data.data || [])
-            .filter(o => o.status === 'active' || o.status === 'approved')
+        const mO = (resO?.data?.data || [])
             .map(o => ({
                 id: o.id, title: o.judul, type: 'Lomba', category: o.tipe_lomba || 'Akademik', description: o.deskripsi, link: o.link_informasi,
-                detailLabel: `Biaya: Rp ${o.biaya_pendaftaran.toLocaleString('id-ID')}`, daysLeft: '28 hari tersisa', image: '/images/indonesian_students.png'
+                detailLabel: `Biaya: Rp ${(o.biaya_pendaftaran ?? 0).toLocaleString('id-ID')}`, daysLeft: calculateDaysLeft(o.deadline), image: '/images/indonesian_students.png'
             }));
         latestPrograms.value = [...mB, ...mO].sort((a, b) => b.id - a.id);
     } catch (e) {
@@ -220,30 +256,17 @@ const handleRegisterAI = (rec) => {
     // FIX: SELALU gunakan informasi dari AI (judul & deskripsi AI)
     // bukan menimpa dengan data dari Latest Program.
     
-    let validId = 1;
-    let validCategory = 'Rekomendasi AI';
-    let validType = rec.type === 'scholarship' || rec.type === 'Beasiswa' ? 'Beasiswa' : 'Lomba';
-
-    if (fullProgram) {
-        validId = fullProgram.id;
-        validType = fullProgram.type;
-        validCategory = fullProgram.category;
-    } else {
-        // Jika dari CSV mock data, pinjam ID program asli pertama agar bisa masuk ke instansi
-        const fallbackProgram = latestPrograms.value[0];
-        if (fallbackProgram) {
-            validId = fallbackProgram.id;
-            validType = fallbackProgram.type;
-            validCategory = fallbackProgram.category;
-        }
+    if (!fullProgram) {
+        showToast('Program ini hanya rekomendasi AI dan belum terdaftar di database untuk pendaftaran langsung.', 'error');
+        return;
     }
 
     selectedLatestProgram.value = {
-        id: validId,
+        id: fullProgram.id,
         title: rec.title,             // WAJIB: Judul dari AI
         description: rec.description, // WAJIB: Deskripsi dari AI
-        type: validType,
-        category: validCategory,
+        type: fullProgram.type,
+        category: fullProgram.category,
         detailLabel: 'Hasil Rekomendasi AI',
         image: '/images/hero_student.png',
         is_ai_recommendation: true    // Flag khusus untuk RegistrationModal
@@ -339,10 +362,25 @@ const chartMaxLabel = computed(() => {
     return Math.max(...trend);
 });
 
-const handleExportCSV = () => {
+const handleExportCSV = async () => {
     const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080') + '/api';
     const token = getAuthToken();
-    window.open(`${backendUrl}/instansi/export-csv?token=${token}`, '_blank');
+    try {
+        const response = await axios.get(`${backendUrl}/instansi/export-csv`, {
+            headers: { Authorization: `Bearer ${token}` },
+            responseType: 'blob'
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'export.csv');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        showToast('Data berhasil diekspor.', 'success');
+    } catch (e) {
+        showToast('Gagal mengekspor data.', 'error');
+    }
 };
 
 const handleGoToPendingApplicants = () => {
@@ -376,14 +414,14 @@ const fetchInstansiDashboard = async () => {
         const resAllInstansi = await axios.get(`${backendUrl}/instansi`, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        if (resAllInstansi.data && resAllInstansi.data.data) {
+        if (resAllInstansi?.data?.data) {
             instansiProfile = resAllInstansi.data.data.find(i => i.user_id === userId);
         }
 
         const resApp = await axios.get(`${backendUrl}/instansi/pendaftaran`, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        const applicants = (resApp.data.data || []).map(a => {
+        const applicants = (resApp?.data?.data || []).map(a => {
             if (a.alasan && a.alasan.startsWith('[AI-PROGRAM: ')) {
                 const match = a.alasan.match(/^\[AI-PROGRAM:\s*(.*?)\]\s*(.*)/);
                 if (match) {
@@ -399,8 +437,8 @@ const fetchInstansiDashboard = async () => {
             axios.get(`${backendUrl}/olimpiade`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
 
-        let beasiswas = resB.data.data || [];
-        let olimpiades = resO.data.data || [];
+        let beasiswas = resB?.data?.data || [];
+        let olimpiades = resO?.data?.data || [];
         if (instansiProfile) {
             beasiswas = beasiswas.filter(b => b.instansi_id === instansiProfile.id);
             olimpiades = olimpiades.filter(o => o.instansi_id === instansiProfile.id);
@@ -526,19 +564,21 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Head :title="user.role === 'instansi' ? 'Instansi Dashboard' : 'Siswa Dashboard'" />
+    <Head :title="user.role === 'instansi' ? 'Dashboard Instansi' : 'Dashboard Siswa'" />
 
     <AuthenticatedLayout>
         <!-- Toast Notification -->
         <transition name="toast">
-            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border text-sm font-bold transition-all duration-300"
+            <div v-if="messageToast.text" class="fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl text-sm font-bold transition-all duration-300 text-white"
                 :class="{
-                    'bg-emerald-50 text-emerald-800 border-emerald-100': messageToast.type === 'success',
-                    'bg-amber-50 text-amber-800 border-amber-100': messageToast.type === 'warning',
-                    'bg-red-50 text-red-800 border-red-100': messageToast.type === 'error'
+                    'bg-emerald-500': messageToast.type === 'success',
+                    'bg-amber-400 !text-slate-900': messageToast.type === 'warning',
+                    'bg-red-500': messageToast.type === 'error'
                 }"
             >
-                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-emerald-500 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+                <span v-if="messageToast.type === 'success'" class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-xs">✓</span>
+                <span v-else-if="messageToast.type === 'warning'" class="h-5 w-5 bg-black/20 text-slate-900 rounded-full flex items-center justify-center text-xs">!</span>
+                <span v-else class="h-5 w-5 bg-white/30 text-white rounded-full flex items-center justify-center text-xs">×</span>
                 {{ messageToast.text }}
             </div>
         </transition>
@@ -595,18 +635,18 @@ onMounted(async () => {
             <!-- Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div class="space-y-1">
-                    <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Executive Overview</h1>
-                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Track institutional performance and scholarship outreach metrics.</p>
+                    <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Ringkasan Eksekutif</h1>
+                    <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Pantau kinerja instansi dan metrik jangkauan beasiswa.</p>
                 </div>
                 <div class="flex items-center gap-3 self-start sm:self-auto">
                     <span class="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold rounded-xl cursor-default select-none">
-                        📅 Last 7 Days
+                        📅 7 Hari Terakhir
                     </span>
                     <button
                         @click="handleExportCSV"
                         class="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl transition duration-150 cursor-pointer"
                     >
-                        📥 Export Report
+                        📥 Ekspor Laporan
                     </button>
                 </div>
             </div>
@@ -627,7 +667,7 @@ onMounted(async () => {
                     <!-- Total Applicants -->
                     <div class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-36 relative overflow-hidden group">
                         <div class="flex justify-between items-start">
-                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Applicants</span>
+                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Pelamar</span>
                             <span class="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">+12%</span>
                         </div>
                         <div>
@@ -643,7 +683,7 @@ onMounted(async () => {
                     <!-- Active Programs -->
                     <div class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-36 relative overflow-hidden group">
                         <div class="flex justify-between items-start">
-                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Active Programs</span>
+                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Program Aktif</span>
                             <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800/50">+5.4%</span>
                         </div>
                         <div>
@@ -659,7 +699,7 @@ onMounted(async () => {
                     <!-- Approval Rate -->
                     <div class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-6 rounded-3xl shadow-sm flex flex-col justify-between h-36 relative overflow-hidden group">
                         <div class="flex justify-between items-start">
-                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Approval Rate</span>
+                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Tingkat Persetujuan</span>
                             <span class="text-[10px] font-black text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 px-2 py-0.5 rounded-full border border-red-100 dark:border-red-800/50">-2.1%</span>
                         </div>
                         <div>
@@ -680,11 +720,11 @@ onMounted(async () => {
                     <div class="lg:col-span-8 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl p-6 shadow-sm space-y-4">
                         <div class="flex justify-between items-center pb-3 border-b border-slate-50 dark:border-slate-700/50">
                             <div>
-                                <h3 class="text-base font-black text-slate-800 dark:text-white">Applications Trend</h3>
-                                <p class="text-[10px] font-semibold text-slate-400 dark:text-slate-500">Daily application volume — last 7 days</p>
+                                <h3 class="text-base font-black text-slate-800 dark:text-white">Tren Pendaftaran</h3>
+                                <p class="text-[10px] font-semibold text-slate-400 dark:text-slate-500">Volume pendaftaran harian — 7 hari terakhir</p>
                             </div>
                             <div class="flex items-center gap-4 text-[10px] font-bold text-slate-500">
-                                <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-indigo-600"></span>Applications</span>
+                                <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-indigo-600"></span>Pendaftaran</span>
                             </div>
                         </div>
 
@@ -730,8 +770,8 @@ onMounted(async () => {
                     <!-- Recent Activity List -->
                     <div class="lg:col-span-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl p-6 shadow-sm space-y-6">
                         <div class="flex justify-between items-center pb-3 border-b border-slate-50 dark:border-slate-700/50">
-                            <h3 class="text-base font-black text-slate-800 dark:text-white">Recent Activity</h3>
-                            <Link :href="route('pelamar')" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">View All</Link>
+                            <h3 class="text-base font-black text-slate-800 dark:text-white">Aktivitas Terbaru</h3>
+                            <Link :href="route('pelamar')" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">Lihat Semua</Link>
                         </div>
 
                         <div v-if="recentActivity.length > 0" class="space-y-4">
@@ -760,18 +800,18 @@ onMounted(async () => {
                     <!-- Top Performing Program -->
                     <div class="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
                         <div class="space-y-1 text-left">
-                            <span class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Top Performing Program</span>
+                            <span class="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Program Terbaik</span>
                             <h3 class="text-lg font-black text-slate-800 dark:text-white leading-tight">{{ instansiStats.topProgram }}</h3>
                         </div>
 
                         <div class="flex gap-8 pt-4">
                             <div class="text-left">
                                 <p class="text-2xl font-black text-slate-800 dark:text-white">{{ instansiStats.totalApplicants.toLocaleString('id-ID') }}</p>
-                                <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Applications</p>
+                                <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Pendaftaran</p>
                             </div>
                             <div class="text-left">
                                 <p class="text-2xl font-black text-emerald-500">{{ instansiStats.approvalRate }}%</p>
-                                <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Approval Rate</p>
+                                <p class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Tingkat Persetujuan</p>
                             </div>
                         </div>
                     </div>
@@ -781,9 +821,9 @@ onMounted(async () => {
                         <div class="flex items-start gap-3 text-left">
                             <span class="h-10 w-10 shrink-0 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl flex items-center justify-center text-lg font-black">!</span>
                             <div class="space-y-1">
-                                <h3 class="text-base font-black text-red-950 dark:text-red-300">Action Required</h3>
+                                <h3 class="text-base font-black text-red-950 dark:text-red-300">Tindakan Diperlukan</h3>
                                 <p class="text-xs text-red-700/80 dark:text-red-400/80 leading-relaxed font-bold">
-                                    {{ instansiStats.pendingCount }} applications for active programs have been pending review for over 72 hours.
+                                    {{ instansiStats.pendingCount }} pendaftaran untuk program aktif membutuhkan peninjauan yang belum diproses lebih dari 72 jam.
                                 </p>
                             </div>
                         </div>
@@ -793,7 +833,7 @@ onMounted(async () => {
                                 @click="handleGoToPendingApplicants"
                                 class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
                             >
-                                Review Pending
+                                Tinjau Pendaftaran
                             </button>
                         </div>
                     </div>
@@ -809,7 +849,7 @@ onMounted(async () => {
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div class="space-y-1">
                     <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                        Welcome back, {{ user.name }}! 👋
+                        Selamat datang kembali, {{ user.name }}! 👋
                     </h1>
                     <p class="text-sm font-medium text-slate-500 dark:text-slate-400 leading-relaxed">
                         Anda berada di peringkat 2% kandidat teraktif bulan ini. 3 beasiswa baru menanti ulasan Anda.
@@ -819,7 +859,7 @@ onMounted(async () => {
 
             <div class="space-y-4">
                 <div class="flex items-center justify-between mb-2">
-                    <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Smart Recommendations</h2>
+                    <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Rekomendasi Cerdas</h2>
                     <button v-if="aiRecommendations.length > 0 || currentStep > 1" @click="currentStep = 5" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-xl transition cursor-pointer">
                         + Tambah Minat/Bakat Manual
                     </button>
@@ -845,7 +885,7 @@ onMounted(async () => {
                         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="transform translate-x-8 opacity-0" enter-to-class="transform translate-x-0 opacity-100" leave-active-class="transition duration-200 ease-in absolute top-0 w-full" leave-from-class="transform translate-x-0 opacity-100" leave-to-class="transform -translate-x-8 opacity-0">
                             <div v-if="currentStep === 1" class="space-y-6 w-full">
                                 <div class="space-y-2">
-                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Step 1: Pilih Bidang & Keahlian</h3>
+                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Langkah 1: Pilih Bidang & Keahlian</h3>
                                     <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Pilih satu atau lebih kategori yang mendeskripsikan minat Anda.</p>
                                 </div>
                                 <div v-for="category in ['Interest Field', 'Technical Skills']" :key="category" class="space-y-3">
@@ -864,7 +904,7 @@ onMounted(async () => {
                         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="transform translate-x-8 opacity-0" enter-to-class="transform translate-x-0 opacity-100" leave-active-class="transition duration-200 ease-in absolute top-0 w-full" leave-from-class="transform translate-x-0 opacity-100" leave-to-class="transform -translate-x-8 opacity-0">
                             <div v-if="currentStep === 2" class="space-y-6 w-full">
                                 <div class="space-y-2">
-                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Step 2: Preferensi Program</h3>
+                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Langkah 2: Preferensi Program</h3>
                                     <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Tentukan jenis program apa yang sedang Anda cari.</p>
                                 </div>
                                 <div class="space-y-3">
@@ -883,7 +923,7 @@ onMounted(async () => {
                         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="transform translate-x-8 opacity-0" enter-to-class="transform translate-x-0 opacity-100" leave-active-class="transition duration-200 ease-in absolute top-0 w-full" leave-from-class="transform translate-x-0 opacity-100" leave-to-class="transform -translate-x-8 opacity-0">
                             <div v-if="currentStep === 3" class="space-y-6 w-full">
                                 <div class="space-y-2">
-                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Step 3: Wilayah Tujuan</h3>
+                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Langkah 3: Wilayah Tujuan</h3>
                                     <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Apakah Anda mencari program lokal atau internasional?</p>
                                 </div>
                                 <div class="space-y-3">
@@ -902,7 +942,7 @@ onMounted(async () => {
                         <transition enter-active-class="transition duration-300 ease-out" enter-from-class="transform translate-x-8 opacity-0" enter-to-class="transform translate-x-0 opacity-100" leave-active-class="transition duration-200 ease-in absolute top-0 w-full" leave-from-class="transform translate-x-0 opacity-100" leave-to-class="transform -translate-x-8 opacity-0">
                             <div v-if="currentStep === 4" class="space-y-6 w-full">
                                 <div class="space-y-2">
-                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Step 4: Goals & Karir</h3>
+                                    <h3 class="text-lg font-black text-slate-800 dark:text-white">Langkah 4: Tujuan & Karir</h3>
                                     <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Tentukan tujuan akhir dan aspirasi karir Anda.</p>
                                 </div>
                                 <div v-for="category in ['Program Goals', 'Career Aspirations']" :key="category" class="space-y-3">
@@ -929,7 +969,7 @@ onMounted(async () => {
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <!-- Kiri: Review Panel -->
                                     <div class="bg-indigo-50/50 dark:bg-slate-800/50 border border-indigo-100 dark:border-slate-700 rounded-2xl p-5">
-                                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Selected Pills</p>
+                                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Pilihan Terpilih</p>
                                         <transition-group name="pill-fade" tag="div" class="flex flex-wrap gap-2 min-h-[40px]">
                                             <span v-for="pill in allSelectedPills" :key="pill" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50 text-xs font-bold shadow-sm transition-all duration-300">
                                                 {{ pill }}
@@ -941,7 +981,7 @@ onMounted(async () => {
 
                                     <!-- Kanan: Custom Input -->
                                     <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl p-5">
-                                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Custom Tags Manual</p>
+                                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Tag Kustom Manual</p>
                                         <div class="flex flex-col gap-3 w-full">
                                             <input
                                                 v-model="customPillInput"
@@ -969,7 +1009,7 @@ onMounted(async () => {
                                             Sinkronisasi AI...
                                         </span>
                                         <span v-else class="flex items-center justify-center gap-2">
-                                            ✨ Save Changes & Cari Rekomendasi
+                                            ✨ Simpan Perubahan & Cari Rekomendasi
                                         </span>
                                     </button>
                                 </div>
@@ -1028,20 +1068,38 @@ onMounted(async () => {
 
             <!-- Latest Programs -->
             <div class="space-y-6">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Latest Programs</h2>
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Program Terbaru</h2>
 
-                    <div class="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
-                        <button
-                            v-for="tab in ['All', 'Beasiswa', 'Akademik', 'Non-Akademik']"
-                            :key="tab"
-                            type="button"
-                            @click="activeTab = tab"
-                            class="px-4 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
-                            :class="activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
-                        >
-                            {{ tab }}
-                        </button>
+                    <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                        <!-- Search Bar -->
+                        <div class="relative w-full sm:w-64">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <input
+                                v-model="searchQuery"
+                                type="text"
+                                placeholder="Cari program, kategori..."
+                                class="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition dark:text-white"
+                            />
+                        </div>
+
+                        <!-- Filter Tabs -->
+                        <div class="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+                            <button
+                                v-for="tab in ['All', 'Beasiswa', 'Akademik', 'Non-Akademik']"
+                                :key="tab"
+                                type="button"
+                                @click="activeTab = tab"
+                                class="px-4 py-2 rounded-lg text-xs font-bold transition-all focus:outline-none"
+                                :class="activeTab === tab ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
+                            >
+                                {{ tab }}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1088,7 +1146,12 @@ onMounted(async () => {
                     <template v-else>
                         <div class="col-span-full py-12 flex flex-col items-center justify-center text-center">
                             <span class="text-4xl mb-3 block opacity-50">📂</span>
-                            <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">Belum ada program terbaru yang dipublikasikan.</p>
+                            <p v-if="searchQuery" class="text-slate-500 dark:text-slate-400 font-bold text-sm">
+                                Tidak ada program yang sesuai dengan pencarian "{{ searchQuery }}".
+                            </p>
+                            <p v-else class="text-slate-500 dark:text-slate-400 font-bold text-sm">
+                                Belum ada program terbaru yang dipublikasikan.
+                            </p>
                         </div>
                     </template>
                 </div>

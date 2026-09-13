@@ -119,3 +119,7 @@ def reload_ai_memory():
 @app.get("/")
 def health_check():
     return {"status": "AI Microservice is running smoothly"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

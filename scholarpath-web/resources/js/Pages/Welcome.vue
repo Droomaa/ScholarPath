@@ -86,9 +86,9 @@ onMounted(() => {
 
                 <!-- Navigation Links -->
                 <nav class="hidden md:flex items-center gap-8">
-                    <a href="#why-scholarpath" class="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Beasiswa</a>
-                    <a href="#why-scholarpath" class="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Mentorship</a>
+                    <a href="#fitur" class="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Fitur</a>
                     <a href="#visi" class="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Visi Kami</a>
+                    <a href="#kontak" class="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition">Kontak</a>
                 </nav>
 
                 <!-- Auth & Theme Buttons -->
@@ -177,7 +177,7 @@ onMounted(() => {
                             </svg>
                         </Link>
                         <a
-                            href="#why-scholarpath"
+                            href="#fitur"
                             class="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-200 font-bold rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700/50 transition duration-200"
                         >
                             Lihat Panduan
@@ -254,7 +254,7 @@ onMounted(() => {
 
         <!-- Why ScholarPath Section -->
         <section 
-            id="why-scholarpath" 
+            id="fitur" 
             data-section="why" 
             class="max-w-7xl mx-auto px-6 mb-20 md:mb-28 text-center space-y-12 transition-all duration-1000 transform"
             :class="visibleSections.why ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'"
@@ -310,7 +310,7 @@ onMounted(() => {
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                             </svg>
                         </div>
-                        <h3 class="text-xl font-bold text-slate-900 dark:text-white">Verified Institutions</h3>
+                        <h3 class="text-xl font-bold text-slate-900 dark:text-white">Institusi Terverifikasi</h3>
                         <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400 font-medium">
                             Kami bermitra erat dengan 200+ universitas dan lembaga donor terpercaya untuk memastikan setiap data beasiswa valid dan terjamin.
                         </p>
@@ -328,7 +328,7 @@ onMounted(() => {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-slate-900 dark:text-white">Easy Application</h3>
+                    <h3 class="text-xl font-bold text-slate-900 dark:text-white">Pendaftaran Mudah</h3>
                     <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-400 font-medium">
                         Kirim berkas pendaftaran langsung melalui platform satu pintu kami yang mudah, hemat waktu, dan efisien.
                     </p>
@@ -451,7 +451,7 @@ onMounted(() => {
         </section>
 
         <!-- Footer -->
-        <footer class="bg-slate-950 text-slate-400 py-16 border-t border-slate-900">
+        <footer id="kontak" class="bg-slate-950 text-slate-400 py-16 border-t border-slate-900">
             <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 pb-12">
                 
                 <!-- Column 1: Info -->
@@ -498,7 +498,7 @@ onMounted(() => {
 
                 <!-- Column 4: Newsletter -->
                 <div class="md:col-span-3 space-y-4 text-left">
-                    <span class="text-xs font-bold uppercase tracking-wider text-white">Newsletter</span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-white">Buletin Info</span>
                     <p class="text-xs text-slate-500 font-medium">
                         Dapatkan info beasiswa terbaru langsung di emailmu setiap minggu.
                     </p>
@@ -516,7 +516,7 @@ onMounted(() => {
             </div>
 
             <div class="max-w-7xl mx-auto px-6 pt-8 border-t border-slate-900 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-medium text-slate-600">
-                <p>&copy; 2026 ScholarPath. All rights reserved.</p>
+                <p>&copy; 2026 ScholarPath. Hak cipta dilindungi.</p>
             </div>
         </footer>
     </div>
@@ -526,5 +526,11 @@ onMounted(() => {
 /* Scroll Reveal Animation Styling */
 [data-section] {
     will-change: transform, opacity;
+}
+</style>
+
+<style>
+html {
+    scroll-behavior: smooth;
 }
 </style>

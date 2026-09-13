@@ -108,7 +108,7 @@ const exportReport = () => {
 </script>
 
 <template>
-    <Head title="Admin Dashboard" />
+    <Head title="Dashboard Admin" />
 
     <AdminLayout>
         <!-- Toast -->
