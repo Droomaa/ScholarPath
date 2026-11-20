@@ -4,7 +4,18 @@ from sklearn.metrics.pairwise import cosine_similarity
 # Import kelas canggih dari ai_matcher_fix.py
 from ai_matcher_fix import ScholarPathMatcher
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
+
+# Wajib ditambahkan agar browser mengizinkan pengiriman POST request
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 print("⏳ Sedang memuat Dataset, BM25, dan Model NLP dari ai_matcher_fix... (Tunggu sebentar)")
 API_KEY = "AIzaSyDzz1MW6DYV5VWzC9e_wYZqX-VSTs0ec0Y" 
@@ -57,6 +68,22 @@ def calculate_match(data: MatchRequest):
             filter_type=data.filter_type
         )
         
+        # --- PERBAIKAN FINAL: Paksa semua nama kolom menjadi huruf kecil ---
+        results_df.columns = results_df.columns.str.lower()
+        
+        # Samakan nama kolom untuk Golang
+        if "match_score" in results_df.columns:
+            results_df.rename(columns={"match_score": "match_score_percentage"}, inplace=True)
+        elif "similarity" in results_df.columns:
+            results_df.rename(columns={"similarity": "match_score_percentage"}, inplace=True)
+            
+        # Jaga-jaga kalau header CSV aslinya beda nama
+        if "program_name" in results_df.columns:
+            results_df.rename(columns={"program_name": "title"}, inplace=True)
+        elif "judul" in results_df.columns:
+            results_df.rename(columns={"judul": "title"}, inplace=True)
+        # -------------------------------------------------------------------
+        
         results_list = results_df.to_dict(orient="records")
         
         return {
@@ -68,6 +95,31 @@ def calculate_match(data: MatchRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal memproses AI: {str(e)}")
 
+# =====================================================================
+# RUTE BARU: SINKRONISASI OTOMATIS DARI GOLANG
+# =====================================================================
+@app.post("/api/reload-csv")
+def reload_ai_memory():
+    global matcher # Akses matcher utama agar bisa ditimpa dengan data baru
+    try:
+        print("🔄 Menerima perintah dari Golang: Mengisi ulang otak AI dari CSV baru...")
+        
+        # Inisialisasi ulang object Matcher agar membaca CSV yang baru saja di-update Golang
+        matcher = ScholarPathMatcher('new_sample_dataset.csv', API_KEY)
+        
+        print("✅ Sinkronisasi Selesai! Mesin AI siap dengan data terbaru.")
+        return {
+            "status": "success", 
+            "message": "Dataset AI berhasil diperbarui di RAM dan siap melayani pencarian baru!"
+        }
+    except Exception as e:
+        print(f"❌ Gagal memuat ulang CSV: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Gagal memuat ulang CSV: {str(e)}")
+
 @app.get("/")
 def health_check():
     return {"status": "AI Microservice is running smoothly"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

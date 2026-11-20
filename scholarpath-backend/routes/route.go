@@ -16,6 +16,7 @@ func SetupRouter() *gin.Engine {
 
 	// Rute Publik (Tanpa Token)
 	r.POST("/login", controllers.LoginUser)
+	r.POST("/login-google", controllers.LoginGoogle)
 	r.POST("/register/siswa", controllers.RegisterSiswa)
 	r.POST("/register/instansi", controllers.RegisterInstansi)
 
@@ -37,6 +38,8 @@ func SetupRouter() *gin.Engine {
 		protected.GET("/user/profile", controllers.GetMyProfile)
 		protected.PUT("/user/profile", controllers.UpdateProfile)
 		protected.GET("/user/pendaftaran", controllers.GetRiwayatPendaftaranSiswa)
+		protected.GET("/user/pendaftaran/:id", controllers.GetPendaftaranDetailSiswa)
+		protected.PUT("/user/pendaftaran/:id/berkas", controllers.UpdatePendaftaranBerkas)
         
 		// --- FITUR WISHLIST SISWA ---
 		protected.POST("/user/wishlist", controllers.AddToWishlist)
@@ -68,6 +71,8 @@ func SetupRouter() *gin.Engine {
 		protected.DELETE("/jenjang/:id", controllers.DeleteJenjang)
 
 		// Instansi
+		protected.GET("/instansi/me", controllers.GetMyInstansi)     // Profil instansi by token
+		protected.POST("/instansi/upload-docs", controllers.UploadVerificationDocs) // Upload 2 PDF verifikasi
 		protected.GET("/instansi", controllers.GetAllInstansi)
 		protected.GET("/instansi/:id", controllers.GetInstansiByID)
 		protected.PUT("/instansi/:id", controllers.UpdateInstansi)
@@ -95,6 +100,9 @@ func SetupRouter() *gin.Engine {
 		protected.PUT("/admin/verify/olimpiade/:id", controllers.VerifyOlimpiade)
 		protected.PUT("/admin/verify/beasiswa/:id", controllers.VerifyBeasiswa)
 		protected.POST("/admin/notifications", controllers.CreateNotification)
+		protected.GET("/admin/users", controllers.GetAdminUsers)
+		protected.GET("/admin/stats", controllers.GetAdminStats)
+		protected.GET("/admin/verification-queue", controllers.GetVerificationQueue)
 
 		// --- RUTE NOTIFIKASI UMUM (Semua User) ---
 		protected.GET("/user/notifications", controllers.GetMyNotifications)

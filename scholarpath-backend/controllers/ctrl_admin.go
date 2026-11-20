@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"scholarpath-backend/koneksi"
 	"scholarpath-backend/models"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,8 +45,24 @@ func VerifyInstansi(c *gin.Context) {
 		return
 	}
 
-	// Ubah status menjadi true
-	instansi.IsVerified = true
+	var payload struct {
+		Status string `json:"status"`
+		Reason string `json:"reason"`
+	}
+	
+	if err := c.ShouldBindJSON(&payload); err == nil && payload.Status != "" {
+		instansi.Status = payload.Status
+		if payload.Status == "approved" {
+			instansi.IsVerified = true
+		} else {
+			instansi.IsVerified = false
+		}
+	} else {
+		// Default backward compatibility jika payload kosong
+		instansi.IsVerified = true
+		instansi.Status = "approved"
+	}
+
 	koneksi.DB.Save(&instansi)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Akun Instansi berhasil diverifikasi", "data": instansi})
@@ -65,9 +82,36 @@ func VerifyOlimpiade(c *gin.Context) {
 		return
 	}
 
-	// Isi kolom VerifiedBy dengan ID Admin yang sedang login
+	var payload struct {
+		Status    string `json:"status"`
+		IsVisible bool   `json:"is_visible"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	olimpiade.VerifiedBy = &adminID
+	olimpiade.Status = payload.Status
+	olimpiade.IsVisible = payload.IsVisible
 	koneksi.DB.Save(&olimpiade)
+
+	// Send Notification
+	if olimpiade.InstansiID != nil {
+		var instansi models.Instansi
+		if err := koneksi.DB.First(&instansi, *olimpiade.InstansiID).Error; err == nil && instansi.UserID != nil {
+			msg := "Selamat! Program " + olimpiade.Judul + " Anda telah lolos verifikasi dan resmi dipublikasikan."
+			if payload.Status == "rejected" {
+				msg = "Maaf, pengajuan program " + olimpiade.Judul + " Anda ditolak karena belum memenuhi kriteria. Silakan coba ajukan program baru."
+			}
+			notif := models.Notification{
+				UserID:  *instansi.UserID,
+				Title:   "Hasil Verifikasi Program",
+				Message: msg,
+			}
+			koneksi.DB.Create(&notif)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Olimpiade berhasil diverifikasi oleh Admin", "data": olimpiade})
 }
@@ -86,8 +130,36 @@ func VerifyBeasiswa(c *gin.Context) {
 		return
 	}
 
+	var payload struct {
+		Status    string `json:"status"`
+		IsVisible bool   `json:"is_visible"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	beasiswa.VerifiedBy = &adminID
+	beasiswa.Status = payload.Status
+	beasiswa.IsVisible = payload.IsVisible
 	koneksi.DB.Save(&beasiswa)
+
+	// Send Notification
+	if beasiswa.InstansiID != nil {
+		var instansi models.Instansi
+		if err := koneksi.DB.First(&instansi, *beasiswa.InstansiID).Error; err == nil && instansi.UserID != nil {
+			msg := "Selamat! Program " + beasiswa.Nama + " Anda telah lolos verifikasi dan resmi dipublikasikan."
+			if payload.Status == "rejected" {
+				msg = "Maaf, pengajuan program " + beasiswa.Nama + " Anda ditolak karena belum memenuhi kriteria. Silakan coba ajukan program baru."
+			}
+			notif := models.Notification{
+				UserID:  *instansi.UserID,
+				Title:   "Hasil Verifikasi Program",
+				Message: msg,
+			}
+			koneksi.DB.Create(&notif)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Beasiswa berhasil diverifikasi oleh Admin", "data": beasiswa})
 }
@@ -129,4 +201,187 @@ func GetMyNotifications(c *gin.Context) {
 	koneksi.DB.Where("user_id = ?", userID).Order("created_at desc").Find(&notifs)
 
 	c.JSON(http.StatusOK, gin.H{"data": notifs})
+}
+
+// 6. GET ALL USERS FOR USER MANAGEMENT
+type UserListItem struct {
+	ID         uint   `json:"id"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	Role       string `json:"role"`
+	Keahlian   string `json:"keahlian"`
+	IsVerified bool   `json:"is_verified"` // for instansi role
+	CreatedAt  string `json:"created_at"`
+}
+
+func GetAdminUsers(c *gin.Context) {
+	_, isAllowed := enforceAdminRole(c)
+	if !isAllowed {
+		return
+	}
+
+	var users []models.User
+	if err := koneksi.DB.Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Fetch all instansis to check verification status for role = "instansi"
+	var instansis []models.Instansi
+	koneksi.DB.Find(&instansis)
+	instansiMap := make(map[uint]bool)
+	for _, inst := range instansis {
+		if inst.UserID != nil {
+			instansiMap[*inst.UserID] = inst.IsVerified
+		}
+	}
+
+	var result []UserListItem
+	for _, u := range users {
+		isVerified := false
+		if u.Role == "instansi" {
+			isVerified = instansiMap[u.ID]
+		} else {
+			isVerified = true // student is verified by default
+		}
+		result = append(result, UserListItem{
+			ID:         u.ID,
+			Name:       u.Name,
+			Email:      u.Email,
+			Role:       u.Role,
+			Keahlian:   u.Keahlian,
+			IsVerified: isVerified,
+			CreatedAt:  u.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": result})
+}
+
+// 7. GET ADMIN STATS
+func GetAdminStats(c *gin.Context) {
+	_, isAllowed := enforceAdminRole(c)
+	if !isAllowed {
+		return
+	}
+
+	var totalStudents int64
+	koneksi.DB.Model(&models.User{}).Where("role = ?", "student").Count(&totalStudents)
+
+	var totalInstansi int64
+	koneksi.DB.Model(&models.Instansi{}).Where("is_verified = ?", true).Count(&totalInstansi)
+
+	var pendingInstansi int64
+	koneksi.DB.Model(&models.Instansi{}).Where("is_verified = ?", false).Count(&pendingInstansi)
+
+	var pendingBeasiswas int64
+	koneksi.DB.Model(&models.Beasiswa{}).Where("verified_by IS NULL").Count(&pendingBeasiswas)
+
+	var pendingOlimpiades int64
+	koneksi.DB.Model(&models.Olimpiade{}).Where("verified_by IS NULL").Count(&pendingOlimpiades)
+
+	pendingContent := pendingBeasiswas + pendingOlimpiades
+
+	var trendStudents []int64
+	var trendInstitutions []int64
+
+	today := time.Now()
+	for i := 6; i >= 0; i-- {
+		targetDate := today.AddDate(0, 0, -i)
+		startOfDay := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, targetDate.Location())
+		endOfDay := startOfDay.AddDate(0, 0, 1)
+
+		var countStudents int64
+		koneksi.DB.Model(&models.User{}).Where("role = ? AND created_at >= ? AND created_at < ?", "student", startOfDay, endOfDay).Count(&countStudents)
+		trendStudents = append(trendStudents, countStudents)
+
+		var countInstansi int64
+		koneksi.DB.Model(&models.Instansi{}).Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).Count(&countInstansi)
+		trendInstitutions = append(trendInstitutions, countInstansi)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"total_students":      totalStudents,
+			"total_instansi":      totalInstansi,
+			"pending_content":     pendingContent,
+			"pending_institution": pendingInstansi,
+			"trend_students":      trendStudents,
+			"trend_institutions":  trendInstitutions,
+		},
+	})
+}
+
+// 8. GET VERIFICATION QUEUE
+type QueueItem struct {
+	ID             uint   `json:"id"`
+	Name           string `json:"name"`
+	Type           string `json:"type"` // "Partner Account", "Scholarship Content", "Competition Content"
+	SubmissionDate string `json:"submission_date"`
+	Status         string `json:"status"` // "PENDING"
+}
+
+func GetVerificationQueue(c *gin.Context) {
+	_, isAllowed := enforceAdminRole(c)
+	if !isAllowed {
+		return
+	}
+
+	var queue []QueueItem
+
+	// 1. Fetch unverified instansis
+	var instansis []models.Instansi
+	koneksi.DB.Where("is_verified = ?", false).Find(&instansis)
+	for _, inst := range instansis {
+		queue = append(queue, QueueItem{
+			ID:             inst.ID,
+			Name:           inst.Nama,
+			Type:           "Partner Account",
+			SubmissionDate: inst.CreatedAt.Format("02 Jan 2006"),
+			Status:         "PENDING",
+		})
+	}
+
+	// 2. Fetch unverified beasiswas
+	var beasiswas []models.Beasiswa
+	koneksi.DB.Where("verified_by IS NULL").Find(&beasiswas)
+	for _, b := range beasiswas {
+		// Get instansi name for provider
+		var instName string = "Private Foundation"
+		if b.InstansiID != nil {
+			var inst models.Instansi
+			if err := koneksi.DB.First(&inst, b.InstansiID).Error; err == nil {
+				instName = inst.Nama
+			}
+		}
+		queue = append(queue, QueueItem{
+			ID:             b.ID,
+			Name:           b.Nama + " (" + instName + ")",
+			Type:           "Scholarship Content",
+			SubmissionDate: b.CreatedAt.Format("02 Jan 2006"),
+			Status:         "PENDING",
+		})
+	}
+
+	// 3. Fetch unverified olimpiades
+	var olimpiades []models.Olimpiade
+	koneksi.DB.Where("verified_by IS NULL").Find(&olimpiades)
+	for _, o := range olimpiades {
+		var instName string = "Academic Institution"
+		if o.InstansiID != nil {
+			var inst models.Instansi
+			if err := koneksi.DB.First(&inst, o.InstansiID).Error; err == nil {
+				instName = inst.Nama
+			}
+		}
+		queue = append(queue, QueueItem{
+			ID:             o.ID,
+			Name:           o.Judul + " (" + instName + ")",
+			Type:           "Competition Content",
+			SubmissionDate: o.CreatedAt.Format("02 Jan 2006"),
+			Status:         "PENDING",
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": queue})
 }

@@ -61,14 +61,34 @@ func CreateOlimpiade(c *gin.Context) {
 		olimpiade.InstansiID = &instansi.ID
 	}
 
-	koneksi.DB.Create(&olimpiade)
+	if err := koneksi.DB.Create(&olimpiade).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan olimpiade: " + err.Error()})
+		return
+	}
+
+	// Trigger Notifikasi Awal untuk Instansi
+	notif := models.Notification{
+		UserID:  user.ID, // User ID instansi
+		Title:   "Pengajuan Program",
+		Message: "Program Anda berhasil diajukan dan sedang dalam proses review oleh Admin Pusat.",
+	}
+	koneksi.DB.Create(&notif)
+
 	c.JSON(http.StatusCreated, gin.H{"message": "Olimpiade berhasil dibuat", "data": olimpiade})
 }
 
 // GET ALL OLIMPIADE (Terbuka untuk semua yang sudah login, termasuk Siswa)
 func GetAllOlimpiade(c *gin.Context) {
 	var olimpiades []models.Olimpiade
-	koneksi.DB.Find(&olimpiades)
+	user, _, ok := checkUserAuthorization(c)
+	if ok && user.Role == "student" {
+		koneksi.DB.Where("status = ? AND is_visible = ?", "active", true).Find(&olimpiades)
+	} else if ok && user.Role == "instansi" {
+		koneksi.DB.Find(&olimpiades)
+	} else {
+		// Public or others
+		koneksi.DB.Where("status = ? AND is_visible = ?", "active", true).Find(&olimpiades)
+	}
 	c.JSON(http.StatusOK, gin.H{"data": olimpiades})
 }
 
